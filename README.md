@@ -2,13 +2,14 @@
 
 An open-source amateur radio engineering toolkit built with Python and Streamlit.
 
-## Features (v0.4.0)
+## Features (v0.5.0)
 
 - Half-wave dipole and quarter-wave vertical starting dimensions
 - **Three-element Yagi designer:** 2 m and 70 cm presets, custom frequency, adjustable driven-element gap, interactive scaled boom layout and downloadable CSV cutting list
 - Complete impedance Smith chart with resistance circles and reactance arcs
 - Transmission-line simulator with velocity factor, length, loss and input impedance trajectory
 - NanoVNA Touchstone S1P upload (RI/MA/DB), SWR and return-loss plots, Smith trace and design-frequency comparison
+- VNA workbench: cable reference-plane shifting, interpolated zero-reactance resonance detection, up to five sweep overlays, and downloadable PDF measurement reports
 - Coaxial cable loss and estimated matched-line delivered power (RG-58, RG-8X, RG-213, LMR-400)
 - Ideal resistive L-network matching, with two component solutions
 - Complex impedance, reflection coefficient, SWR and return loss
@@ -17,10 +18,7 @@ An open-source amateur radio engineering toolkit built with Python and Streamlit
 
 **Important:** Antenna dimensions are simplified starting approximations, not electromagnetic simulation or validated tape-measure construction dimensions. Tune with an antenna analyzer. Free-space loss does not predict real-world coverage.
 
-Read [Yagi design assumptions and build cautions](docs/yagi-designer.md
-docs/advanced-rf.md
-docs/measurements.md
-docs/advanced-rf.md) and [advanced RF model assumptions](docs/advanced-rf.md).
+Read [Yagi assumptions](docs/yagi-designer.md), [advanced RF models](docs/advanced-rf.md), [transmission lines and Touchstone](docs/measurements.md), and [NanoVNA workbench](docs/nanovna-workbench.md).
 
 ## Quick start
 
@@ -51,11 +49,17 @@ src/rf_lab/core.py
 src/rf_lab/yagi.py
 src/rf_lab/advanced.py
 src/rf_lab/measurements.py
+src/rf_lab/workbench.py
+src/rf_lab/reporting.py
 tests/test_core.py
 tests/test_yagi.py
 tests/test_advanced.py
 tests/test_measurements.py
+tests/test_workbench.py
 docs/yagi-designer.md
+docs/advanced-rf.md
+docs/measurements.md
+docs/nanovna-workbench.md
 .github/workflows/tests.yml
 pyproject.toml
 ```
