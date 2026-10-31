@@ -1,8 +1,13 @@
 # 📡 RF Lab
 
+**[🚀 Launch the Live Demo](https://rf-lab-jdaher.streamlit.app)** · [Source code](https://github.com/JamalDaher/rf-lab)
+
+[![Live Demo](https://img.shields.io/badge/Streamlit-Live%20Demo-FF4B4B?logo=streamlit&logoColor=white)](https://rf-lab-jdaher.streamlit.app)
+
+
 An open-source amateur radio engineering toolkit built with Python and Streamlit.
 
-## Features (v1.9.0)
+## Features (v2.0.0)
 
 - **Local NEC-2 benchmark pipeline:** optional local CLI execution, impedance-only comparison, reproducibility hashes, JSON report import (not yet tested with a real NEC binary)
 - **NEC-2 deck generator:** download a reproducible Yagi .nec model, with an opt-in local executable adapter (no NEC executable bundled; not yet an end-to-end automated benchmark)
@@ -28,7 +33,7 @@ An open-source amateur radio engineering toolkit built with Python and Streamlit
 Read [Yagi assumptions](docs/yagi-designer.md), [advanced RF models](docs/advanced-rf.md), [transmission lines and Touchstone](docs/measurements.md), [NanoVNA workbench](docs/nanovna-workbench.md), [antenna tuning](docs/antenna-tuning.md), [radiation patterns](docs/radiation-patterns.md
 docs/yagi-patterns.md), and [Yagi pattern limitations](docs/yagi-patterns.md), and [experimental thin-wire EFIE limitations](docs/thin-wire-mom.md).
 
-## v1.9.0 validation status
+## v2.0.0 validation status
 
 This release provides numerical diagnostics, **not a validated antenna solver**. See [validation report and outstanding acceptance gates](docs/validation-v1.md). Physical impedance, SWR and gain predictions remain experimental.
 
@@ -49,3 +54,9 @@ NEC-2c support: [real solver CI smoke test and setup](docs/nec2c-integration.md)
 [Automated NEC-2c regression CI and downloadable run artifacts](docs/benchmark-regression.md) (numerical drift only, not physical accuracy validation).
 
 [Experimental three-element Yagi optimization, geometry exports and limitations](docs/yagi-optimization.md).
+
+## RF Lab v2.0.0 — Design Workbench
+
+The Streamlit interface now uses a **grouped sidebar** instead of 18 crowded tabs, with a restrained responsive layout. The new **Design Workbench** saves versioned Yagi designs to downloadable JSON, imports them back, compares up to five session designs, plots experimental EFIE impedance/SWR frequency sweeps, and exports a ZIP with NEC-2 deck, dimensions and optional sweep data. Session history is not server-persistent: download JSON to preserve it. These are unvalidated numerical estimates, not verified antenna specifications.
+
+**Live demo:** https://rf-lab-jdaher.streamlit.app
