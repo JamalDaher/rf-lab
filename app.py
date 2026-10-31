@@ -28,7 +28,7 @@ from rf_lab.advanced import (smith_coordinates, gamma_from_impedance, coax_loss_
 
 st.set_page_config(page_title="RF Lab", page_icon="📡", layout="wide")
 st.title("📡 RF Lab")
-st.caption("Amateur Radio Engineering Suite · v1.6.0")
+st.caption("Amateur Radio Engineering Suite · v1.7.0")
 antenna, yagi, matching, power, propagation, smith, coax, lmatch, line_tab, vna_tab, workbench_tab, tuning_tab, patterns_tab, yagi_pattern_tab, mom_tab, validation_tab, nec_tab = st.tabs(
     ["Antenna Designer", "3-Element Yagi", "SWR Analyzer", "RF Power",
      "Path Loss", "Smith Chart", "Coax Loss", "L-Network",
@@ -838,3 +838,46 @@ with nec_tab:
                        "independent proof of antenna-model accuracy.")
         except (ValueError,KeyError,TypeError,UnicodeDecodeError) as exc:
             st.error(f"Invalid benchmark summary: {exc}")
+
+with nec_tab:
+    st.divider()
+    st.subheader("Validation dashboard & PDF reports")
+    st.caption("Compare two compatible mesh benchmarks, generate a PDF, "
+               "and inspect reproducibility metadata. No certified physical "
+               "accuracy is implied.")
+    baseline_upload=st.file_uploader("Optional baseline summary.json",
+        type=["json"],key="benchmark_history_baseline")
+    candidate_upload=st.file_uploader("Candidate summary.json",
+        type=["json"],key="benchmark_history_candidate")
+    if candidate_upload is not None:
+        try:
+            from rf_lab.benchmark_reports import validate_summary,compare_summaries
+            from rf_lab.benchmark_pdf import build_pdf
+            import json
+            candidate=validate_summary(candidate_upload.getvalue())
+            baseline=(validate_summary(baseline_upload.getvalue())
+                      if baseline_upload is not None else None)
+            st.success("Benchmark schema and internal numerical consistency verified.")
+            st.caption("SHA-256 values in an uploaded summary are declarations; "
+                       "verifying raw deck and solver-output bytes requires "
+                       "the original local artifacts.")
+            st.dataframe(candidate["cases"],hide_index=True,use_container_width=True)
+            if baseline is not None:
+                diff=compare_summaries(baseline,candidate)
+                st.subheader("Historical numerical differences")
+                st.dataframe(diff["changes"],hide_index=True,use_container_width=True)
+                fig=go.Figure()
+                fig.add_trace(go.Scatter(
+                    x=[r["segments_per_element"] for r in diff["changes"]],
+                    y=[r["impedance_error_change_ohm"] for r in diff["changes"]],
+                    mode="lines+markers",name="Change in absolute error"))
+                fig.update_layout(xaxis_title="Segments per element",
+                                  yaxis_title="Error change (Ω)")
+                st.plotly_chart(fig,use_container_width=True)
+            pdf=build_pdf(candidate,baseline)
+            st.download_button("Download scientific benchmark PDF",
+                data=pdf,file_name="rf-lab-benchmark-report.pdf",
+                mime="application/pdf",key="benchmark_pdf_download")
+            st.warning("Validated data structure, not electromagnetic accuracy.")
+        except (ValueError,TypeError,KeyError,UnicodeDecodeError) as exc:
+            st.error(f"Benchmark validation failed: {exc}")
