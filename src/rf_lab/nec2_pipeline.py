@@ -13,6 +13,7 @@ from pathlib import Path
 from .nec2_runner import generate_yagi_nec2, run_nec2, parse_nec2_input_impedance
 from .mom import solve_yagi_mom
 from .nec2c_adapter import run_nec2c
+from .nec2_patterns import parse_nec2_radiation_cut, compare_pattern_cut
 
 @dataclass(frozen=True)
 class PipelineResult:
@@ -58,6 +59,13 @@ def run_benchmark(frequency_mhz, lengths_m, positions_m, executable,
                          wire_radius_mm=wire_radius_mm,
                          segments_per_element=segments_per_element)
     comparison=compare_impedance(model.feed_impedance_ohm,nec_z)
+    pattern_available=False
+    try:
+        cut=parse_nec2_radiation_cut(run.output)
+        comparison.update(compare_pattern_cut(model.azimuth_deg,model.azimuth_db,cut))
+        pattern_available=True
+    except ValueError as exc:
+        comparison["pattern_parse_warning"]=str(exc)
     manifest={
         "schema_version":1,
         "reference_solver":"NEC-2",
@@ -74,7 +82,7 @@ def run_benchmark(frequency_mhz, lengths_m, positions_m, executable,
         "output_sha256":hashlib.sha256(run.output.encode()).hexdigest(),
         "feed_model_warning":"NEC excitation and RF Lab EFIE feed are not proven equivalent",
         "validation_status":"UNVALIDATED — numerical differences only",
-        "pattern_metrics_available":False
+        "pattern_metrics_available":pattern_available
     }
     return PipelineResult(deck,run.output,manifest,comparison)
 
