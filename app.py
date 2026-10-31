@@ -41,7 +41,7 @@ with st.sidebar:
     st.caption("Choose a workspace; only the selected tool is shown.")
     category=st.radio("Workspace",["Design & optimize","Measure & match","RF calculators","Simulate & validate"],label_visibility="collapsed")
     options={
-        "Design & optimize": ["Antenna Designer","3-Element Yagi","Yagi Patterns","Yagi Optimizer"],
+        "Design & optimize": ["Antenna Designer","3-Element Yagi","Yagi Patterns","Yagi Optimizer", "Design Workbench"],
         "Measure & match": ["SWR Analyzer","Smith Chart","L-Network","NanoVNA S1P","VNA Workbench","Antenna Tuning"],
         "RF calculators": ["RF Power","Path Loss","Coax Loss","Transmission Line"],
         "Simulate & validate": ["Radiation Patterns","Thin-Wire MoM","Validation","NEC Comparison"],
@@ -968,3 +968,76 @@ if section == "Yagi Optimizer":
                 mime="text/csv")
         except (ValueError,np.linalg.LinAlgError,OverflowError) as exc:
             st.error(f"Optimization could not complete: {exc}")
+
+if section == "Design Workbench":
+    from rf_lab.design_workbench import (make_design,validate_design,design_json,
+        compare_designs,frequency_sweep,package_design)
+    st.caption("Portable JSON designs · local session history · experimental EFIE frequency sweeps")
+    if "design_library" not in st.session_state:
+        st.session_state.design_library=[]
+    left,right=st.columns([2,1])
+    with left:
+        design_name=st.text_input("Design name",value="2 m reference Yagi",max_chars=80)
+        frequency=st.number_input("Design frequency (MHz)",min_value=1.0,max_value=3000.0,value=146.0,key="dw_freq")
+        wavelength=299792458/(frequency*1e6)
+        lengths=[st.number_input(label,min_value=0.01,value=round(factor*wavelength,5),format="%.5f",key=f"dw_l{i}")
+                 for i,(label,factor) in enumerate(zip(
+                     ["Reflector length (m)","Driven length (m)","Director length (m)"],[.505,.475,.45]))]
+        gap1=st.number_input("Reflector → driven spacing (m)",min_value=.001,value=round(.2*wavelength,5),format="%.5f")
+        gap2=st.number_input("Driven → director spacing (m)",min_value=.001,value=round(.15*wavelength,5),format="%.5f")
+    with right:
+        radius=st.number_input("Wire radius (mm)",min_value=.01,value=2.0,key="dw_radius")
+        mesh=st.select_slider("Mesh segments per element",options=[5,7,9,11],value=7,key="dw_mesh")
+        uploads=st.file_uploader("Import saved design JSON files",type=["json"],
+                                 accept_multiple_files=True,key="dw_import")
+        if st.button("Import designs"):
+            for upload in uploads or []:
+                try:
+                    design=validate_design(upload.getvalue())
+                    st.session_state.design_library=[
+                        d for d in st.session_state.design_library if d["name"]!=design["name"]]+[design]
+                except (ValueError,TypeError,KeyError) as exc:
+                    st.error(f"{upload.name}: {exc}")
+    try:
+        current=make_design(design_name,frequency,lengths,[0,gap1,gap1+gap2],radius,mesh)
+        st.download_button("Download current design JSON",design_json(current),
+                           file_name="rf-lab-design.json",mime="application/json")
+        if st.button("Save design to this session"):
+            st.session_state.design_library=[
+                d for d in st.session_state.design_library if d["name"]!=current["name"]]+[current]
+            st.success("Saved in this browser session. Download JSON for permanent storage.")
+        designs=st.session_state.design_library
+        if designs:
+            st.subheader("Session design history")
+            st.dataframe(compare_designs(designs[:5]),hide_index=True,use_container_width=True)
+            st.caption("History is temporary. Export JSON to keep designs across sessions.")
+        st.subheader("Experimental frequency sweep")
+        a,b,p=st.columns(3)
+        with a:
+            start=st.number_input("Start (MHz)",min_value=0.1,value=round(frequency*.95,3),key="dw_start")
+        with b:
+            stop=st.number_input("Stop (MHz)",min_value=0.2,value=round(frequency*1.05,3),key="dw_stop")
+        with p:
+            points=st.slider("Sweep points",2,21,7,key="dw_points")
+        if st.button("Run EFIE frequency sweep",key="dw_run"):
+            try:
+                st.session_state.dw_sweep=frequency_sweep(current,start,stop,points)
+                st.session_state.dw_sweep_design=design_json(current)
+            except (ValueError,np.linalg.LinAlgError,OverflowError) as exc:
+                st.error(str(exc))
+        sweep=(st.session_state.get("dw_sweep",[])
+               if st.session_state.get("dw_sweep_design")==design_json(current) else [])
+        if sweep:
+            st.dataframe(sweep,hide_index=True,use_container_width=True)
+            figure=go.Figure()
+            figure.add_trace(go.Scatter(x=[x["frequency_mhz"] for x in sweep],
+                y=[x["swr_50"] for x in sweep],mode="lines+markers",name="Estimated SWR"))
+            figure.update_layout(xaxis_title="Frequency (MHz)",yaxis_title="Experimental SWR")
+            st.plotly_chart(figure,use_container_width=True)
+        st.download_button("Download design package (ZIP)",
+            data=package_design(current,sweep),file_name="rf-lab-design-package.zip",
+            mime="application/zip")
+        st.warning("EFIE sweep estimates are unvalidated. The package includes an NEC deck "
+                   "for independent analysis; it is not a verified construction plan.")
+    except (ValueError,TypeError) as exc:
+        st.error(f"Invalid design: {exc}")
