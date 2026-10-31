@@ -51,7 +51,7 @@ def mesh_sensitivity(frequency_mhz, lengths_m, positions_m,
             rel = abs(result.feed_impedance_ohm-previous.feed_impedance_ohm)/max(
                 abs(result.feed_impedance_ohm),abs(previous.feed_impedance_ohm),1e-12)
             delta_db = abs(result.directivity_dbi-previous.directivity_dbi)
-        rows.append(MeshRow(count,result.feed_impedance_ohm,result.swr,
+        rows.append(MeshRow(count,result.feed_impedance_ohm,result.swr_50,
                             result.directivity_dbi,result.front_to_back_db,
                             result.condition_number,rel,delta_db))
         previous = result
