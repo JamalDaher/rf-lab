@@ -9,6 +9,8 @@ import streamlit as st
 from rf_lab.core import (dipole_length_m, quarter_wave_m, swr, return_loss_db,
                          watts_to_dbm, dbm_to_watts, free_space_path_loss_db)
 from rf_lab.yagi import design_yagi, cutting_list
+from rf_lab.workbench import (shift_reference_plane, resonance_frequencies_hz, compare_sweeps)
+from rf_lab.reporting import create_measurement_pdf
 from rf_lab.measurements import (smith_grid, line_input_gamma, line_input_impedance,
     parse_s1p, swr_from_gamma, return_loss_from_gamma, best_match, comparison_mhz)
 from rf_lab.advanced import (smith_coordinates, gamma_from_impedance, coax_loss_db,
@@ -17,11 +19,11 @@ from rf_lab.advanced import (smith_coordinates, gamma_from_impedance, coax_loss_
 
 st.set_page_config(page_title="RF Lab", page_icon="📡", layout="wide")
 st.title("📡 RF Lab")
-st.caption("Amateur Radio Engineering Suite · v0.4.0")
-antenna, yagi, matching, power, propagation, smith, coax, lmatch, line_tab, vna_tab = st.tabs(
+st.caption("Amateur Radio Engineering Suite · v0.5.0")
+antenna, yagi, matching, power, propagation, smith, coax, lmatch, line_tab, vna_tab, workbench_tab = st.tabs(
     ["Antenna Designer", "3-Element Yagi", "SWR Analyzer", "RF Power",
      "Path Loss", "Smith Chart", "Coax Loss", "L-Network",
-     "Transmission Line", "NanoVNA S1P"])
+     "Transmission Line", "NanoVNA S1P", "VNA Workbench"])
 with antenna:
     f = st.number_input("Frequency (MHz)", min_value=0.001, value=146.0)
     k = st.slider("Length correction factor", 0.80, 1.00, 0.95)
@@ -228,3 +230,91 @@ with vna_tab:
             st.plotly_chart(sm, use_container_width=True)
             st.info("Minimum SWR is a best-match frequency, not necessarily zero-reactance resonance. "
                     "Measurement accuracy depends on calibration and fixture setup.")
+
+with workbench_tab:
+    st.subheader("NanoVNA measurement workbench")
+    files = st.file_uploader("Upload up to five S1P sweeps", type=["s1p"],
+                             accept_multiple_files=True, key="workbench_files")
+    design_mhz = st.number_input("Target design frequency (MHz)", min_value=0.001,
+                                  value=146.0, key="workbench_design")
+    st.markdown("**Reference-plane correction**")
+    shift_m = st.number_input("Shift toward antenna/DUT (m)", value=0.0,
+                               help="Positive removes cable phase; negative shifts away.")
+    shift_vf = st.slider("Cable velocity factor", 0.1, 1.0, 0.66, key="workbench_vf")
+    shift_loss = st.number_input("Cable loss (dB / 100 m)", min_value=0.0,
+                                 value=0.0, key="workbench_loss")
+    notes = st.text_area("Report notes", placeholder="Antenna, calibration, cable, and tuning changes")
+    if files:
+        if len(files) > 5:
+            st.error("Please upload no more than five sweeps.")
+        else:
+            sweeps = {}
+            for index, uploaded in enumerate(files, 1):
+                label = f"{index}: {uploaded.name}"
+                try:
+                    raw = parse_s1p(uploaded.getvalue().decode("utf-8-sig"))
+                    corrected = shift_reference_plane(raw, shift_m, shift_vf, shift_loss)
+                    sweeps[label] = corrected
+                except (UnicodeDecodeError, ValueError) as exc:
+                    st.error(f"{uploaded.name}: {exc}")
+            if sweeps:
+                refs = {s.reference_ohm for s in sweeps.values()}
+                if len(refs) > 1:
+                    st.warning("Files have different reference impedances. Direct SWR "
+                               "comparison requires a common reference impedance.")
+                summaries = compare_sweeps(sweeps)
+                rows = []
+                for summary in summaries:
+                    rows.append({
+                        "Sweep": summary.name,
+                        "Points": summary.points,
+                        "Minimum SWR": round(summary.minimum_swr, 3)
+                                       if summary.minimum_swr is not None else None,
+                        "Best match (MHz)": round(summary.best_match_mhz, 4)
+                                            if summary.best_match_mhz is not None else None,
+                        "Reactance-zero crossings (MHz)":
+                            ", ".join(f"{v:.4f}" for v in summary.resonances_mhz) or "None found",
+                    })
+                st.dataframe(rows, hide_index=True, use_container_width=True)
+                swr_fig = go.Figure()
+                rl_fig = go.Figure()
+                smith_fig = go.Figure()
+                for label, pts in smith_grid():
+                    smith_fig.add_trace(go.Scatter(
+                        x=[p.real for p in pts], y=[p.imag for p in pts],
+                        mode="lines", line=dict(color="lightgray", width=1),
+                        showlegend=False, name=label))
+                for name, sweep in sweeps.items():
+                    frequencies = [f/1e6 for f in sweep.frequencies_hz]
+                    swr_fig.add_trace(go.Scatter(
+                        x=frequencies,
+                        y=[v if math.isfinite(v) else None
+                           for v in (swr_from_gamma(g) for g in sweep.gamma)],
+                        name=name))
+                    rl_fig.add_trace(go.Scatter(
+                        x=frequencies,
+                        y=[v if math.isfinite(v) else None
+                           for v in (return_loss_from_gamma(g) for g in sweep.gamma)],
+                        name=name))
+                    smith_fig.add_trace(go.Scatter(
+                        x=[g.real for g in sweep.gamma],
+                        y=[g.imag for g in sweep.gamma],
+                        mode="lines", name=name))
+                swr_fig.update_layout(title="SWR comparison",
+                                      xaxis_title="Frequency (MHz)", yaxis_title="SWR")
+                rl_fig.update_layout(title="Return loss comparison",
+                                     xaxis_title="Frequency (MHz)", yaxis_title="Return loss (dB)")
+                smith_fig.update_layout(title="S11 comparison",
+                    xaxis=dict(range=[-1.1, 1.1], scaleanchor="y"),
+                    yaxis=dict(range=[-1.1, 1.1]), height=500)
+                st.plotly_chart(swr_fig, use_container_width=True)
+                st.plotly_chart(rl_fig, use_container_width=True)
+                st.plotly_chart(smith_fig, use_container_width=True)
+                try:
+                    pdf = create_measurement_pdf(sweeps, design_mhz, notes)
+                    st.download_button("Download measurement report (PDF)", pdf,
+                        file_name="rf_lab_measurement_report.pdf", mime="application/pdf")
+                except ValueError as exc:
+                    st.error(f"Could not create PDF report: {exc}")
+                st.info("Zero-reactance crossings are interpolated between samples. "
+                        "Reference-plane correction is not a replacement for VNA calibration.")
