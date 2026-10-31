@@ -34,22 +34,75 @@ div[data-testid="stMetric"] {border:1px solid rgba(128,140,160,.20);border-radiu
 div[data-testid="stSidebar"] {border-right:1px solid rgba(128,140,160,.18)}
 </style>""",unsafe_allow_html=True)
 st.title("📡 RF Lab")
-st.caption("RF Engineering Workbench · v2.0.0 · Experimental models clearly labeled")
+st.caption("RF Engineering Workbench · v2.1.0 · Experimental models clearly labeled")
 with st.sidebar:
     st.header("Explore RF Lab")
     st.caption("Choose a workspace; only the selected tool is shown.")
-    category=st.radio("Workspace",["Design & optimize","Measure & match","RF calculators","Simulate & validate"],label_visibility="collapsed")
+    category=st.radio("Workspace",["Home","Design & optimize","Measure & match","RF calculators","Simulate & validate"],label_visibility="collapsed",key="rf_category")
     options={
         "Design & optimize": ["Antenna Designer","3-Element Yagi","Yagi Patterns","Yagi Optimizer", "Design Workbench"],
         "Measure & match": ["SWR Analyzer","Smith Chart","L-Network","NanoVNA S1P","VNA Workbench","Antenna Tuning"],
         "RF calculators": ["RF Power","Path Loss","Coax Loss","Transmission Line"],
         "Simulate & validate": ["Radiation Patterns","Thin-Wire MoM","Validation","NEC Comparison"],
     }
-    section=st.selectbox("Tool",options[category],key="rf_section_"+category)
+    if category=="Home":
+        section="Home"
+    else:
+        section=st.selectbox("Tool",options[category],key="rf_section_"+category)
     st.divider()
     st.caption("Experimental simulations require independent measurement.")
     st.link_button("GitHub source","https://github.com/JamalDaher/rf-lab")
-st.subheader(section)
+if section != "Home":
+    st.subheader(section)
+
+def open_workspace(category_name, tool_name):
+    """Switch both navigation controls before Streamlit instantiates them."""
+    st.session_state["rf_category"]=category_name
+    st.session_state["rf_section_"+category_name]=tool_name
+
+if section == "Home":
+    st.markdown("### Engineering tools, one workspace")
+    st.caption("Design antennas, analyze measurements, and investigate RF systems. "
+               "Start with a tool below or open your saved designs.")
+    st.markdown("#### Start here")
+    featured=[
+        ("📐","Design Workbench","Save, compare and export Yagi antenna designs.","Design & optimize"),
+        ("📡","Yagi Optimizer","Explore constrained three-element antenna candidates.","Design & optimize"),
+        ("📊","NanoVNA S1P","Import Touchstone measurements and inspect matching.","Measure & match"),
+        ("🧭","Smith Chart","Explore complex impedance and matching behavior.","Measure & match"),
+        ("📈","Radiation Patterns","Visualize reference antenna radiation patterns.","Simulate & validate"),
+        ("🔬","Validation","Inspect numerical sensitivity and model limitations.","Simulate & validate"),
+    ]
+    for start in (0,3):
+        cols=st.columns(3,gap="medium")
+        for col,(symbol,name,description,group) in zip(cols,featured[start:start+3]):
+            with col:
+                with st.container(border=True):
+                    st.markdown(f"### {symbol} {name}")
+                    st.caption(description)
+                    st.button("Open tool",key="home_"+name,
+                              use_container_width=True,
+                              on_click=open_workspace,args=(group,name))
+    st.markdown("#### Your design workspace")
+    saved=st.session_state.get("design_library",[])
+    left,right=st.columns([2,1])
+    with left:
+        with st.container(border=True):
+            st.metric("Designs in this session",len(saved))
+            if saved:
+                st.caption("Recent: "+", ".join(d["name"] for d in saved[-3:]))
+            else:
+                st.caption("No designs saved in this session yet.")
+            st.button("Open design history",key="home_design_history",
+                      on_click=open_workspace,args=("Design & optimize","Design Workbench"))
+    with right:
+        with st.container(border=True):
+            st.markdown("**Model confidence**")
+            st.caption("Experimental EFIE outputs are not independently validated. "
+                       "Check NEC results and real measurements before construction.")
+    st.caption("RF Lab v2.1.0 · Open-source RF engineering tools · "
+               "Design history is local to the current session.")
+
 if section == "Antenna Designer":
     f = st.number_input("Frequency (MHz)", min_value=0.001, value=146.0)
     k = st.slider("Length correction factor", 0.80, 1.00, 0.95)
