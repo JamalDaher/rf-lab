@@ -11,6 +11,8 @@ from rf_lab.core import (dipole_length_m, quarter_wave_m, swr, return_loss_db,
 from rf_lab.yagi import design_yagi, cutting_list
 from rf_lab.workbench import (shift_reference_plane, resonance_frequencies_hz, compare_sweeps)
 from rf_lab.reporting import create_measurement_pdf
+from rf_lab.patterns import (ANTENNA_TYPES, radiation_mesh, elevation_cut,
+                             azimuth_cut, pattern_db)
 from rf_lab.tuning import (tuning_advice, tuning_comparison, add_history_entry,
                            history_json, load_history)
 from rf_lab.measurements import (smith_grid, line_input_gamma, line_input_impedance,
@@ -21,11 +23,11 @@ from rf_lab.advanced import (smith_coordinates, gamma_from_impedance, coax_loss_
 
 st.set_page_config(page_title="RF Lab", page_icon="📡", layout="wide")
 st.title("📡 RF Lab")
-st.caption("Amateur Radio Engineering Suite · v0.6.0")
-antenna, yagi, matching, power, propagation, smith, coax, lmatch, line_tab, vna_tab, workbench_tab, tuning_tab = st.tabs(
+st.caption("Amateur Radio Engineering Suite · v0.7.0")
+antenna, yagi, matching, power, propagation, smith, coax, lmatch, line_tab, vna_tab, workbench_tab, tuning_tab, patterns_tab = st.tabs(
     ["Antenna Designer", "3-Element Yagi", "SWR Analyzer", "RF Power",
      "Path Loss", "Smith Chart", "Coax Loss", "L-Network",
-     "Transmission Line", "NanoVNA S1P", "VNA Workbench", "Antenna Tuning"])
+     "Transmission Line", "NanoVNA S1P", "VNA Workbench", "Antenna Tuning", "Radiation Patterns"])
 with antenna:
     f = st.number_input("Frequency (MHz)", min_value=0.001, value=146.0)
     k = st.slider("Length correction factor", 0.80, 1.00, 0.95)
@@ -406,3 +408,48 @@ with tuning_tab:
     st.warning("Length guidance assumes resonance varies approximately inversely "
                "with element length. Do not cut to the full estimate without "
                "small adjustments and repeated measurements.")
+
+with patterns_tab:
+    st.subheader("Interactive antenna radiation patterns")
+    st.caption("Idealized normalized far-field models — not an electromagnetic solver or coverage prediction.")
+    model = st.selectbox("Antenna model", ANTENNA_TYPES, key="pattern_model")
+    pattern_frequency = st.number_input("Operating frequency (MHz)", min_value=0.001,
+                                         value=146.0, key="pattern_frequency")
+    st.metric("Free-space wavelength", f"{299.792458 / pattern_frequency:.3f} m")
+    floor = st.slider("Plot floor (dB)", min_value=-60, max_value=-10,
+                      value=-35, step=5)
+    elevation_angle = st.slider("Azimuth-cut elevation above horizon (degrees)",
+                                min_value=-90, max_value=90, value=0)
+    theta_deg, elevation_power = elevation_cut(model)
+    azimuth_deg, azimuth_power = azimuth_cut(model, elevation_angle)
+    left, right = st.columns(2)
+    with left:
+        elevation_fig = go.Figure(go.Scatterpolar(
+            theta=theta_deg, r=np.maximum(10*np.log10(np.maximum(elevation_power, 1e-12)), floor)-floor,
+            mode="lines", name="Elevation"))
+        elevation_fig.update_layout(title="Elevation cut (relative power, dB)",
+            polar=dict(radialaxis=dict(tickvals=[0, -floor/2, -floor],
+                ticktext=[f"{floor} dB", f"{floor/2:g} dB", "0 dB"],
+                range=[0, -floor])), showlegend=False)
+        st.plotly_chart(elevation_fig, use_container_width=True)
+    with right:
+        azimuth_fig = go.Figure(go.Scatterpolar(
+            theta=azimuth_deg,
+            r=np.maximum(10*np.log10(np.maximum(azimuth_power, 1e-12)), floor)-floor,
+            mode="lines", name="Azimuth"))
+        azimuth_fig.update_layout(title="Azimuth cut (relative power, dB)",
+            polar=dict(radialaxis=dict(tickvals=[0, -floor/2, -floor],
+                ticktext=[f"{floor} dB", f"{floor/2:g} dB", "0 dB"],
+                range=[0, -floor])), showlegend=False)
+        st.plotly_chart(azimuth_fig, use_container_width=True)
+    px, py, pz, radius = radiation_mesh(model)
+    surface = go.Figure(go.Surface(x=px, y=py, z=pz, surfacecolor=radius,
+                                    colorscale="Viridis", showscale=True,
+                                    colorbar=dict(title="Relative field")))
+    surface.update_layout(title="Rotatable 3D field-amplitude pattern",
+        scene=dict(xaxis_title="X", yaxis_title="Y", zaxis_title="Antenna axis (Z)",
+                   aspectmode="data"), height=560)
+    st.plotly_chart(surface, use_container_width=True)
+    st.info("0 dB is the pattern maximum, not dBi. The models are rotationally "
+            "symmetric and assume ideal free space or perfect ground. "
+            "Frequency affects wavelength but not the normalized ideal pattern.")
