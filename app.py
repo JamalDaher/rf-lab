@@ -28,7 +28,7 @@ from rf_lab.advanced import (smith_coordinates, gamma_from_impedance, coax_loss_
 
 st.set_page_config(page_title="RF Lab", page_icon="📡", layout="wide")
 st.title("📡 RF Lab")
-st.caption("Amateur Radio Engineering Suite · v1.5.0")
+st.caption("Amateur Radio Engineering Suite · v1.6.0")
 antenna, yagi, matching, power, propagation, smith, coax, lmatch, line_tab, vna_tab, workbench_tab, tuning_tab, patterns_tab, yagi_pattern_tab, mom_tab, validation_tab, nec_tab = st.tabs(
     ["Antenna Designer", "3-Element Yagi", "SWR Analyzer", "RF Power",
      "Path Loss", "Smith Chart", "Coax Loss", "L-Network",
@@ -791,3 +791,50 @@ with nec_tab:
                         +str(metrics.get("pattern_parse_warning","")))
         except (ValueError,KeyError,TypeError,UnicodeDecodeError) as exc:
             st.error(f"Unable to display radiation comparison: {exc}")
+
+with nec_tab:
+    st.divider()
+    st.subheader("Scientific benchmark suite — mesh sensitivity")
+    st.caption("Upload summary.json produced by the local NEC-2c benchmark "
+               "CLI. These comparisons are not certified physical validation.")
+    st.code("python -m rf_lab.benchmark_cli --executable nec2c "
+            "--solver-version VERIFIED_VERSION --output-dir ./benchmarks",
+            language="bash")
+    suite_upload=st.file_uploader("Upload benchmark summary.json",
+                                  type=["json"],key="benchmark_suite_upload")
+    if suite_upload is not None:
+        try:
+            import json
+            summary=json.loads(suite_upload.getvalue())
+            if (summary.get("schema_version")!=1 or
+                    summary.get("kind")!="rf-lab-nec2c-mesh-benchmark"):
+                raise ValueError("unsupported benchmark summary")
+            cases=summary["cases"]
+            if not isinstance(cases,list) or not 2<=len(cases)<=8:
+                raise ValueError("expected 2–8 benchmark cases")
+            rows=[]
+            for case in cases:
+                n=int(case["segments_per_element"])
+                if n<5 or n>31 or n%2==0:
+                    raise ValueError("invalid mesh")
+                rows.append({"Segments":n,
+                    "NEC R (Ω)":float(case["nec_real_ohm"]),
+                    "NEC X (Ω)":float(case["nec_imag_ohm"]),
+                    "EFIE R (Ω)":float(case["efie_real_ohm"]),
+                    "EFIE X (Ω)":float(case["efie_imag_ohm"]),
+                    "Error (Ω)":float(case["absolute_error_ohm"])})
+            st.dataframe(rows,hide_index=True,use_container_width=True)
+            fig=go.Figure()
+            for name in ("NEC R (Ω)","EFIE R (Ω)","NEC X (Ω)","EFIE X (Ω)"):
+                fig.add_trace(go.Scatter(x=[row["Segments"] for row in rows],
+                    y=[row[name] for row in rows],mode="lines+markers",name=name))
+            fig.update_layout(xaxis_title="Segments per element",
+                              yaxis_title="Feed impedance component (Ω)")
+            st.plotly_chart(fig,use_container_width=True)
+            st.download_button("Download benchmark summary",
+                data=json.dumps(summary,indent=2),file_name="summary.json",
+                mime="application/json")
+            st.warning("Mesh convergence is numerical sensitivity, not "
+                       "independent proof of antenna-model accuracy.")
+        except (ValueError,KeyError,TypeError,UnicodeDecodeError) as exc:
+            st.error(f"Invalid benchmark summary: {exc}")
