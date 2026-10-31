@@ -11,6 +11,15 @@ import numpy as np
 C = 299792458.0
 
 
+def _integrate(values, coordinates, axis=-1):
+    """Trapezoidal integration across NumPy 1.26 and 2.x."""
+    method = getattr(np, "trapezoid", None)
+    if method is None:
+        method = np.trapz
+    return method(values, coordinates, axis=axis)
+
+
+
 @dataclass(frozen=True)
 class YagiPattern:
     azimuth_deg: np.ndarray
@@ -81,7 +90,7 @@ def simulate_yagi(frequency_mhz, lengths_m, positions_m, coupling=0.25,
     peak = float(np.max(power))
     if peak <= 0 or not math.isfinite(peak):
         raise ValueError("invalid simulated power")
-    integral = np.trapz(np.trapz(power*np.sin(th),phi,axis=1),theta)
+    integral = _integrate(_integrate(power*np.sin(th),phi,axis=1),theta)
     directivity = 10*math.log10(4*math.pi*peak/integral)
     az = np.linspace(0,360,361)
     azpower = _power(np.full((1,361),np.pi/2),np.deg2rad(az)[None,:],p,currents)[0]
