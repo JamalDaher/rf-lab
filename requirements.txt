@@ -1,2 +1,3 @@
-# Install RF Lab itself (src/ layout) and its runtime dependencies.
+# Streamlit Community Cloud runtime dependencies (explicit for reliable builds)
 -e .
+reportlab>=4.0,<5
