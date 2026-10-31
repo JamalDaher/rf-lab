@@ -11,6 +11,7 @@ from rf_lab.core import (dipole_length_m, quarter_wave_m, swr, return_loss_db,
 from rf_lab.yagi import design_yagi, cutting_list
 from rf_lab.yagi_pattern import simulate_yagi, yagi_surface
 from rf_lab.mom import solve_yagi_mom
+from rf_lab.validation import mesh_sensitivity, short_dipole_directivity_check
 from rf_lab.workbench import (shift_reference_plane, resonance_frequencies_hz, compare_sweeps)
 from rf_lab.reporting import create_measurement_pdf
 from rf_lab.patterns import (ANTENNA_TYPES, radiation_mesh, elevation_cut,
@@ -25,11 +26,11 @@ from rf_lab.advanced import (smith_coordinates, gamma_from_impedance, coax_loss_
 
 st.set_page_config(page_title="RF Lab", page_icon="📡", layout="wide")
 st.title("📡 RF Lab")
-st.caption("Amateur Radio Engineering Suite · v0.9.0")
-antenna, yagi, matching, power, propagation, smith, coax, lmatch, line_tab, vna_tab, workbench_tab, tuning_tab, patterns_tab, yagi_pattern_tab, mom_tab = st.tabs(
+st.caption("Amateur Radio Engineering Suite · v1.0.0")
+antenna, yagi, matching, power, propagation, smith, coax, lmatch, line_tab, vna_tab, workbench_tab, tuning_tab, patterns_tab, yagi_pattern_tab, mom_tab, validation_tab = st.tabs(
     ["Antenna Designer", "3-Element Yagi", "SWR Analyzer", "RF Power",
      "Path Loss", "Smith Chart", "Coax Loss", "L-Network",
-     "Transmission Line", "NanoVNA S1P", "VNA Workbench", "Antenna Tuning", "Radiation Patterns", "Yagi Patterns", "Thin-Wire MoM"])
+     "Transmission Line", "NanoVNA S1P", "VNA Workbench", "Antenna Tuning", "Radiation Patterns", "Yagi Patterns", "Thin-Wire MoM", "Validation"])
 with antenna:
     f = st.number_input("Frequency (MHz)", min_value=0.001, value=146.0)
     k = st.slider("Length correction factor", 0.80, 1.00, 0.95)
@@ -591,3 +592,44 @@ with mom_tab:
                     "sensitivity. Stability alone does not establish physical accuracy.")
     st.markdown("See [solver assumptions](https://github.com/JamalDaher/rf-lab/blob/main/docs/thin-wire-mom.md) "
                 "after this version is merged.")
+
+with validation_tab:
+    st.subheader("Numerical validation diagnostics")
+    st.warning("These diagnostics DO NOT validate the EFIE solver against NEC "
+               "or measured antennas. No engineering-grade accuracy claim.")
+    check = short_dipole_directivity_check()
+    st.metric("Short-dipole integration absolute error",
+              f"{check['absolute_error']:.3g}")
+    st.caption("Checks numerical angular integration of sin²(θ) against "
+               "the analytical directivity 1.5 (1.7609 dBi); "
+               "not an EFIE solver benchmark.")
+    vf = st.number_input("Validation frequency (MHz)",min_value=0.001,
+                         value=146.0,key="validation_frequency")
+    wavelength = 299792458.0/(vf*1e6)
+    vl = [.505*wavelength,.475*wavelength,.45*wavelength]
+    vp = [0,.2*wavelength,.35*wavelength]
+    st.caption("Fixed demonstration Yagi geometry: lengths 0.505λ, 0.475λ, "
+               "0.450λ; positions 0, 0.20λ, 0.35λ; wire radius 2 mm.")
+    if st.button("Run mesh sensitivity study"):
+        try:
+            study = mesh_sensitivity(vf,vl,vp,meshes=(5,7,9,11))
+        except (ValueError,np.linalg.LinAlgError) as exc:
+            st.error(f"Mesh study failed: {exc}")
+        else:
+            st.dataframe([{
+                "Segments/element":r.segments,
+                "Feed R (Ω)":round(r.impedance_ohm.real,3),
+                "Feed X (Ω)":round(r.impedance_ohm.imag,3),
+                "SWR":round(r.swr,3),
+                "Directivity (dBi)":round(r.directivity_dbi,3),
+                "F/B (dB)":round(r.front_to_back_db,3),
+                "Matrix condition":round(r.condition_number,2),
+                "Relative ΔZ":r.relative_impedance_change,
+                "ΔDirectivity (dB)":r.directivity_change_db
+            } for r in study.rows],hide_index=True,use_container_width=True)
+            st.metric("Mesh threshold check",
+                      "Within thresholds" if study.numerically_stable
+                      else "Outside thresholds")
+            st.warning(study.warning)
+    st.markdown("[Read the validation limitations and outstanding acceptance "
+                "gates](https://github.com/JamalDaher/rf-lab/blob/main/docs/validation-v1.md)")
