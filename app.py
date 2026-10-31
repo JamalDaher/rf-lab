@@ -12,6 +12,7 @@ from rf_lab.yagi import design_yagi, cutting_list
 from rf_lab.yagi_pattern import simulate_yagi, yagi_surface
 from rf_lab.mom import solve_yagi_mom
 from rf_lab.validation import mesh_sensitivity, short_dipole_directivity_check
+from rf_lab.nec_reference import load_reference, compare_reference
 from rf_lab.workbench import (shift_reference_plane, resonance_frequencies_hz, compare_sweeps)
 from rf_lab.reporting import create_measurement_pdf
 from rf_lab.patterns import (ANTENNA_TYPES, radiation_mesh, elevation_cut,
@@ -26,11 +27,11 @@ from rf_lab.advanced import (smith_coordinates, gamma_from_impedance, coax_loss_
 
 st.set_page_config(page_title="RF Lab", page_icon="📡", layout="wide")
 st.title("📡 RF Lab")
-st.caption("Amateur Radio Engineering Suite · v1.0.0")
-antenna, yagi, matching, power, propagation, smith, coax, lmatch, line_tab, vna_tab, workbench_tab, tuning_tab, patterns_tab, yagi_pattern_tab, mom_tab, validation_tab = st.tabs(
+st.caption("Amateur Radio Engineering Suite · v1.1.0")
+antenna, yagi, matching, power, propagation, smith, coax, lmatch, line_tab, vna_tab, workbench_tab, tuning_tab, patterns_tab, yagi_pattern_tab, mom_tab, validation_tab, nec_tab = st.tabs(
     ["Antenna Designer", "3-Element Yagi", "SWR Analyzer", "RF Power",
      "Path Loss", "Smith Chart", "Coax Loss", "L-Network",
-     "Transmission Line", "NanoVNA S1P", "VNA Workbench", "Antenna Tuning", "Radiation Patterns", "Yagi Patterns", "Thin-Wire MoM", "Validation"])
+     "Transmission Line", "NanoVNA S1P", "VNA Workbench", "Antenna Tuning", "Radiation Patterns", "Yagi Patterns", "Thin-Wire MoM", "Validation", "NEC Comparison"])
 with antenna:
     f = st.number_input("Frequency (MHz)", min_value=0.001, value=146.0)
     k = st.slider("Length correction factor", 0.80, 1.00, 0.95)
@@ -633,3 +634,63 @@ with validation_tab:
             st.warning(study.warning)
     st.markdown("[Read the validation limitations and outstanding acceptance "
                 "gates](https://github.com/JamalDaher/rf-lab/blob/main/docs/validation-v1.md)")
+
+with nec_tab:
+    st.subheader("NEC-2 / NEC-4 reference comparison")
+    st.warning("Requires independently generated NEC results. RF Lab does not "
+               "run NEC or include a verified NEC benchmark. Comparisons are "
+               "not proof of physical accuracy.")
+    st.markdown("[Reference JSON format and modeling requirements]"
+                "(https://github.com/JamalDaher/rf-lab/blob/main/docs/nec-reference-comparison.md)")
+    uploaded_reference = st.file_uploader("Upload NEC reference JSON",
+                                           type=["json"],key="nec_reference_upload")
+    if uploaded_reference is not None:
+        try:
+            reference = load_reference(uploaded_reference.getvalue())
+        except (ValueError,TypeError,KeyError,UnicodeDecodeError) as exc:
+            st.error(f"Invalid NEC reference: {exc}")
+        else:
+            st.caption(f"Source: {reference.source} · {reference.solver} "
+                       f"{reference.solver_version}")
+            if st.button("Compare experimental EFIE against reference"):
+                try:
+                    comparison = compare_reference(reference)
+                except (ValueError,np.linalg.LinAlgError) as exc:
+                    st.error(f"Comparison failed: {exc}")
+                else:
+                    st.metric("Absolute feed impedance error (Ω)",
+                              f"{comparison['impedance_absolute_error_ohm']:.2f}")
+                    st.metric("Relative feed impedance error",
+                              f"{100*comparison['impedance_relative_error']:.1f}%")
+                    st.metric("Directivity difference (dB)",
+                              f"{comparison['directivity_error_db']:+.2f}")
+                    rows=[
+                        {"Metric":"Resistance error (Ω)",
+                         "Difference":comparison["resistance_error_ohm"]},
+                        {"Metric":"Reactance error (Ω)",
+                         "Difference":comparison["reactance_error_ohm"]},
+                        {"Metric":"Directivity difference (dB)",
+                         "Difference":comparison["directivity_error_db"]}
+                    ]
+                    if comparison["front_to_back_error_db"] is not None:
+                        rows.append({"Metric":"Front/back difference (dB)",
+                                     "Difference":comparison["front_to_back_error_db"]})
+                    if comparison["azimuth_rms_error_db"] is not None:
+                        rows.append({"Metric":"Azimuth RMS error (dB)",
+                                     "Difference":comparison["azimuth_rms_error_db"]})
+                    st.dataframe(rows,hide_index=True,use_container_width=True)
+                    if comparison["azimuth_angles_deg"] is not None:
+                        fig=go.Figure()
+                        fig.add_trace(go.Scatter(
+                            x=comparison["azimuth_angles_deg"],
+                            y=comparison["azimuth_reference_db"],
+                            name="NEC reference",mode="lines+markers"))
+                        fig.add_trace(go.Scatter(
+                            x=comparison["azimuth_angles_deg"],
+                            y=comparison["azimuth_model_db"],
+                            name="Experimental EFIE",mode="lines+markers"))
+                        fig.update_layout(xaxis_title="Azimuth (degrees)",
+                                          yaxis_title="Relative pattern (dB)")
+                        st.plotly_chart(fig,use_container_width=True)
+                    st.warning("Compare geometry, excitation and pattern "
+                               "normalization before interpreting these errors.")
