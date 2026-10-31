@@ -13,6 +13,7 @@ from rf_lab.yagi_pattern import simulate_yagi, yagi_surface
 from rf_lab.mom import solve_yagi_mom
 from rf_lab.validation import mesh_sensitivity, short_dipole_directivity_check
 from rf_lab.nec_reference import load_reference, compare_reference
+from rf_lab.nec2_runner import generate_yagi_nec2
 from rf_lab.workbench import (shift_reference_plane, resonance_frequencies_hz, compare_sweeps)
 from rf_lab.reporting import create_measurement_pdf
 from rf_lab.patterns import (ANTENNA_TYPES, radiation_mesh, elevation_cut,
@@ -27,7 +28,7 @@ from rf_lab.advanced import (smith_coordinates, gamma_from_impedance, coax_loss_
 
 st.set_page_config(page_title="RF Lab", page_icon="📡", layout="wide")
 st.title("📡 RF Lab")
-st.caption("Amateur Radio Engineering Suite · v1.1.0")
+st.caption("Amateur Radio Engineering Suite · v1.2.0")
 antenna, yagi, matching, power, propagation, smith, coax, lmatch, line_tab, vna_tab, workbench_tab, tuning_tab, patterns_tab, yagi_pattern_tab, mom_tab, validation_tab, nec_tab = st.tabs(
     ["Antenna Designer", "3-Element Yagi", "SWR Analyzer", "RF Power",
      "Path Loss", "Smith Chart", "Coax Loss", "L-Network",
@@ -694,3 +695,34 @@ with nec_tab:
                         st.plotly_chart(fig,use_container_width=True)
                     st.warning("Compare geometry, excitation and pattern "
                                "normalization before interpreting these errors.")
+
+with nec_tab:
+    st.divider()
+    st.subheader("Generate a NEC-2 input deck")
+    st.caption("Creates a free-space 3-element Yagi model for an independently "
+               "installed NEC-2 solver. Streamlit Cloud does not run NEC.")
+    nec_freq=st.number_input("Deck frequency (MHz)",min_value=0.001,
+                             value=146.0,key="nec_deck_frequency")
+    nec_wavelength=299792458/(nec_freq*1e6)
+    nec_lengths=[.505*nec_wavelength,.475*nec_wavelength,.45*nec_wavelength]
+    nec_positions=[0,.2*nec_wavelength,.35*nec_wavelength]
+    nec_count=st.select_slider("NEC segments per element",
+                               options=[5,7,9,11,13,15,17,19,21],
+                               value=9,key="nec_deck_segments")
+    nec_radius=st.number_input("NEC wire radius (mm)",min_value=0.01,
+                               value=2.0,key="nec_deck_radius")
+    try:
+        nec_deck=generate_yagi_nec2(nec_freq,nec_lengths,nec_positions,
+                                    wire_radius_mm=nec_radius,
+                                    segments_per_element=nec_count)
+    except ValueError as exc:
+        st.error(f"Invalid NEC geometry: {exc}")
+    else:
+        st.download_button("Download NEC-2 input (.nec)",data=nec_deck,
+                           file_name="rf_lab_yagi.nec",mime="text/plain")
+        with st.expander("Preview NEC-2 input deck"):
+            st.code(nec_deck,language="text")
+    st.info("Run this deck with a compatible local NEC-2 solver, inspect the "
+            "raw output, and convert verified results to the reference JSON "
+            "format for comparison above. This release does not claim a "
+            "completed automated solver-to-JSON pipeline.")
