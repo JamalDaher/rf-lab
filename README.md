@@ -2,8 +2,9 @@
 
 An open-source amateur radio engineering toolkit built with Python and Streamlit.
 
-## Features (v0.9.0)
+## Features (v1.0.0)
 
+- **Numerical validation diagnostics:** multi-resolution mesh sensitivity table and short-dipole analytical integration sanity check (does not validate EFIE accuracy)
 - Half-wave dipole and quarter-wave vertical starting dimensions
 - **Experimental thin-wire EFIE solver:** pulse-basis current distribution, numerical impedance and SWR, polar patterns and mesh sensitivity controls (NOT validated against NEC or analytical benchmarks)
 - **Yagi radiation-pattern explorer:** adjustable three-element geometry, coupled-element surrogate, 2D/3D plots, illustrative directivity and front-to-back ratio
@@ -23,3 +24,7 @@ An open-source amateur radio engineering toolkit built with Python and Streamlit
 
 Read [Yagi assumptions](docs/yagi-designer.md), [advanced RF models](docs/advanced-rf.md), [transmission lines and Touchstone](docs/measurements.md), [NanoVNA workbench](docs/nanovna-workbench.md), [antenna tuning](docs/antenna-tuning.md), [radiation patterns](docs/radiation-patterns.md
 docs/yagi-patterns.md), and [Yagi pattern limitations](docs/yagi-patterns.md), and [experimental thin-wire EFIE limitations](docs/thin-wire-mom.md).
+
+## v1.0.0 validation status
+
+This release provides numerical diagnostics, **not a validated antenna solver**. See [validation report and outstanding acceptance gates](docs/validation-v1.md). Physical impedance, SWR and gain predictions remain experimental.
