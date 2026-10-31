@@ -11,6 +11,8 @@ from rf_lab.core import (dipole_length_m, quarter_wave_m, swr, return_loss_db,
 from rf_lab.yagi import design_yagi, cutting_list
 from rf_lab.workbench import (shift_reference_plane, resonance_frequencies_hz, compare_sweeps)
 from rf_lab.reporting import create_measurement_pdf
+from rf_lab.tuning import (tuning_advice, tuning_comparison, add_history_entry,
+                           history_json, load_history)
 from rf_lab.measurements import (smith_grid, line_input_gamma, line_input_impedance,
     parse_s1p, swr_from_gamma, return_loss_from_gamma, best_match, comparison_mhz)
 from rf_lab.advanced import (smith_coordinates, gamma_from_impedance, coax_loss_db,
@@ -19,11 +21,11 @@ from rf_lab.advanced import (smith_coordinates, gamma_from_impedance, coax_loss_
 
 st.set_page_config(page_title="RF Lab", page_icon="📡", layout="wide")
 st.title("📡 RF Lab")
-st.caption("Amateur Radio Engineering Suite · v0.5.0")
-antenna, yagi, matching, power, propagation, smith, coax, lmatch, line_tab, vna_tab, workbench_tab = st.tabs(
+st.caption("Amateur Radio Engineering Suite · v0.6.0")
+antenna, yagi, matching, power, propagation, smith, coax, lmatch, line_tab, vna_tab, workbench_tab, tuning_tab = st.tabs(
     ["Antenna Designer", "3-Element Yagi", "SWR Analyzer", "RF Power",
      "Path Loss", "Smith Chart", "Coax Loss", "L-Network",
-     "Transmission Line", "NanoVNA S1P", "VNA Workbench"])
+     "Transmission Line", "NanoVNA S1P", "VNA Workbench", "Antenna Tuning"])
 with antenna:
     f = st.number_input("Frequency (MHz)", min_value=0.001, value=146.0)
     k = st.slider("Length correction factor", 0.80, 1.00, 0.95)
@@ -318,3 +320,89 @@ with workbench_tab:
                     st.error(f"Could not create PDF report: {exc}")
                 st.info("Zero-reactance crossings are interpolated between samples. "
                         "Reference-plane correction is not a replacement for VNA calibration.")
+
+with tuning_tab:
+    st.subheader("Antenna tuning assistant")
+    st.caption("First-order length guidance for an adjustable resonant element, not a full antenna model.")
+    target = st.number_input("Tuning target (MHz)", min_value=0.001, value=146.0,
+                              key="tuning_target")
+    current_length = st.number_input("Current resonant element length (mm)",
+                                     min_value=0.1, value=1000.0)
+    tolerance = st.number_input("On-target tolerance (MHz)", min_value=0.0,
+                                value=0.05, step=0.01)
+    before_file = st.file_uploader("Before measurement (.s1p)", type=["s1p"],
+                                   key="tuning_before")
+    after_file = st.file_uploader("After measurement (.s1p), optional",
+                                  type=["s1p"], key="tuning_after")
+    session_label = st.text_input("Tuning session label", value="Antenna tuning")
+    session_notes = st.text_area("Tuning notes", key="tuning_notes")
+    if "tuning_history" not in st.session_state:
+        st.session_state.tuning_history = []
+    import_file = st.file_uploader("Import previous tuning history (JSON)",
+                                   type=["json"], key="tuning_history_import")
+    if import_file is not None and st.button("Import tuning history"):
+        try:
+            st.session_state.tuning_history = load_history(
+                import_file.getvalue().decode("utf-8-sig"))
+            st.success("Tuning history imported into this session.")
+        except (ValueError, UnicodeDecodeError) as exc:
+            st.error(f"History import failed: {exc}")
+    if before_file is not None:
+        try:
+            before = parse_s1p(before_file.getvalue().decode("utf-8-sig"))
+        except (ValueError, UnicodeDecodeError) as exc:
+            st.error(f"Before measurement: {exc}")
+        else:
+            advice = tuning_advice(before, target, current_length, tolerance)
+            if advice.resonance_mhz is not None:
+                st.metric("Nearest measured resonance", f"{advice.resonance_mhz:.4f} MHz",
+                          delta=f"{advice.frequency_error_mhz:+.4f} MHz vs target")
+            st.markdown(f"**Tuning guidance: {advice.direction.capitalize()}**")
+            if advice.estimated_change_mm is not None:
+                st.metric("Estimated length change",
+                          f"{advice.estimated_change_mm:+.2f} mm")
+            st.info(advice.message)
+            if after_file is not None:
+                try:
+                    after = parse_s1p(after_file.getvalue().decode("utf-8-sig"))
+                except (ValueError, UnicodeDecodeError) as exc:
+                    st.error(f"After measurement: {exc}")
+                else:
+                    if before.reference_ohm != after.reference_ohm:
+                        st.warning("Reference impedances differ; compare results with caution.")
+                    comparison = tuning_comparison(before, after, target)
+                    st.subheader("Before vs after")
+                    st.dataframe([comparison], hide_index=True, use_container_width=True)
+                    fig = go.Figure()
+                    for name, sweep in (("Before", before), ("After", after)):
+                        fig.add_trace(go.Scatter(
+                            x=[f/1e6 for f in sweep.frequencies_hz],
+                            y=[v if math.isfinite(v) else None for v in
+                               (swr_from_gamma(g) for g in sweep.gamma)], name=name))
+                    fig.add_vline(x=target, line_dash="dash",
+                                  annotation_text="Target")
+                    fig.update_layout(title="Before/after SWR",
+                                      xaxis_title="Frequency (MHz)", yaxis_title="SWR")
+                    st.plotly_chart(fig, use_container_width=True)
+            if st.button("Add tuning result to session history"):
+                try:
+                    st.session_state.tuning_history = add_history_entry(
+                        st.session_state.tuning_history, session_label, advice,
+                        current_length, session_notes)
+                    st.success("Result saved in this browser session.")
+                except ValueError as exc:
+                    st.error(str(exc))
+    if st.session_state.tuning_history:
+        st.subheader("Tuning history")
+        st.dataframe(st.session_state.tuning_history,
+                     hide_index=True, use_container_width=True)
+        st.download_button("Export tuning history (JSON)",
+                           history_json(st.session_state.tuning_history),
+                           file_name="rf_lab_tuning_history.json",
+                           mime="application/json")
+        if st.button("Clear session history"):
+            st.session_state.tuning_history = []
+            st.rerun()
+    st.warning("Length guidance assumes resonance varies approximately inversely "
+               "with element length. Do not cut to the full estimate without "
+               "small adjustments and repeated measurements.")
