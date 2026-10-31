@@ -28,7 +28,7 @@ from rf_lab.advanced import (smith_coordinates, gamma_from_impedance, coax_loss_
 
 st.set_page_config(page_title="RF Lab", page_icon="📡", layout="wide")
 st.title("📡 RF Lab")
-st.caption("Amateur Radio Engineering Suite · v1.4.0")
+st.caption("Amateur Radio Engineering Suite · v1.5.0")
 antenna, yagi, matching, power, propagation, smith, coax, lmatch, line_tab, vna_tab, workbench_tab, tuning_tab, patterns_tab, yagi_pattern_tab, mom_tab, validation_tab, nec_tab = st.tabs(
     ["Antenna Designer", "3-Element Yagi", "SWR Analyzer", "RF Power",
      "Path Loss", "Smith Chart", "Coax Loss", "L-Network",
@@ -763,3 +763,31 @@ with nec_tab:
                        "verified NEC reference or physical accuracy certificate.")
         except (ValueError,TypeError,KeyError,UnicodeDecodeError) as exc:
             st.error(f"Could not read local benchmark report: {exc}")
+
+with nec_tab:
+    st.divider()
+    st.subheader("NEC radiation pattern comparison")
+    st.caption("Available only for reports with successfully parsed NEC "
+               "theta=90° azimuth cuts; normalized gains are not directivity.")
+    if report_upload is not None:
+        try:
+            import json
+            pattern_report=json.loads(report_upload.getvalue())
+            metrics=pattern_report["comparison"]
+            if "pattern_rms_error_db" in metrics:
+                st.metric("Normalized pattern RMS error (dB)",
+                          f"{metrics['pattern_rms_error_db']:.2f}")
+                fig=go.Figure()
+                fig.add_trace(go.Scatter(x=metrics["pattern_angles_deg"],
+                    y=metrics["nec_relative_db"],name="NEC-2c",mode="lines"))
+                fig.add_trace(go.Scatter(x=metrics["pattern_angles_deg"],
+                    y=metrics["model_relative_db"],name="Experimental EFIE",
+                    mode="lines"))
+                fig.update_layout(xaxis_title="NEC phi (degrees)",
+                                  yaxis_title="Normalized gain (dB)")
+                st.plotly_chart(fig,use_container_width=True)
+            else:
+                st.info("No comparable radiation cut in this report. "
+                        +str(metrics.get("pattern_parse_warning","")))
+        except (ValueError,KeyError,TypeError,UnicodeDecodeError) as exc:
+            st.error(f"Unable to display radiation comparison: {exc}")
