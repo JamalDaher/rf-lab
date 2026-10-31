@@ -28,11 +28,11 @@ from rf_lab.advanced import (smith_coordinates, gamma_from_impedance, coax_loss_
 
 st.set_page_config(page_title="RF Lab", page_icon="📡", layout="wide")
 st.title("📡 RF Lab")
-st.caption("Amateur Radio Engineering Suite · v1.8.0")
-antenna, yagi, matching, power, propagation, smith, coax, lmatch, line_tab, vna_tab, workbench_tab, tuning_tab, patterns_tab, yagi_pattern_tab, mom_tab, validation_tab, nec_tab = st.tabs(
+st.caption("Amateur Radio Engineering Suite · v1.9.0")
+antenna, yagi, matching, power, propagation, smith, coax, lmatch, line_tab, vna_tab, workbench_tab, tuning_tab, patterns_tab, yagi_pattern_tab, mom_tab, validation_tab, nec_tab, optimizer_tab = st.tabs(
     ["Antenna Designer", "3-Element Yagi", "SWR Analyzer", "RF Power",
      "Path Loss", "Smith Chart", "Coax Loss", "L-Network",
-     "Transmission Line", "NanoVNA S1P", "VNA Workbench", "Antenna Tuning", "Radiation Patterns", "Yagi Patterns", "Thin-Wire MoM", "Validation", "NEC Comparison"])
+     "Transmission Line", "NanoVNA S1P", "VNA Workbench", "Antenna Tuning", "Radiation Patterns", "Yagi Patterns", "Thin-Wire MoM", "Validation", "NEC Comparison", "Yagi Optimizer"])
 with antenna:
     f = st.number_input("Frequency (MHz)", min_value=0.001, value=146.0)
     k = st.slider("Length correction factor", 0.80, 1.00, 0.95)
@@ -881,3 +881,72 @@ with nec_tab:
             st.warning("Validated data structure, not electromagnetic accuracy.")
         except (ValueError,TypeError,KeyError,UnicodeDecodeError) as exc:
             st.error(f"Benchmark validation failed: {exc}")
+
+with optimizer_tab:
+    st.subheader("Experimental 3-element Yagi optimizer")
+    st.warning("Optimization uses an experimental, unvalidated EFIE model. "
+               "Scores are not measured antenna gain, match or performance. "
+               "Confirm designs with NEC and an antenna analyzer before building.")
+    from rf_lab.yagi_optimizer import optimize_yagi,cutting_list,optimized_nec_deck
+    opt_frequency=st.number_input("Optimization frequency (MHz)",
+        min_value=1.0,max_value=3000.0,value=146.0,key="opt_frequency")
+    opt_wavelength=299792458/(opt_frequency*1e6)
+    opt_objective=st.selectbox("Objective",
+        ["balanced","match","front_to_back","directivity"],key="opt_objective")
+    opt_iterations=st.slider("Candidate evaluations",1,40,12,key="opt_iterations")
+    opt_seed=st.number_input("Reproducible random seed",
+        min_value=0,max_value=2**32-1,value=42,step=1,key="opt_seed")
+    opt_length=st.slider("Maximum length variation (%)",0,30,8,key="opt_length")
+    opt_spacing=st.slider("Maximum spacing variation (%)",0,30,20,key="opt_spacing")
+    opt_segments=st.select_slider("EFIE segments per element",
+        options=[5,7,9,11],value=7,key="opt_segments")
+    opt_radius=st.number_input("Wire radius (mm)",min_value=0.01,
+        value=2.0,key="opt_radius")
+    st.caption("Baseline geometry: lengths 0.505λ / 0.475λ / 0.450λ; "
+               "boom positions 0 / 0.20λ / 0.35λ. Reflector position fixed.")
+    if st.button("Optimize candidate geometry",key="run_yagi_optimizer"):
+        try:
+            result=optimize_yagi(opt_frequency,
+                [.505*opt_wavelength,.475*opt_wavelength,.45*opt_wavelength],
+                [0,.2*opt_wavelength,.35*opt_wavelength],
+                objective=opt_objective,iterations=opt_iterations,
+                seed=int(opt_seed),length_variation=opt_length/100,
+                spacing_variation=opt_spacing/100,
+                segments_per_element=opt_segments,wire_radius_mm=opt_radius)
+            st.metric("Best experimental objective score",f"{result.best.score:.3f}",
+                delta=f"{result.best.score-result.original.score:+.3f} vs baseline")
+            st.caption(f"Evaluated {result.evaluated} candidates; "
+                       f"rejected {result.rejected}.")
+            st.dataframe(cutting_list(result),hide_index=True,use_container_width=True)
+            fig=go.Figure()
+            for name,candidate in (("Original",result.original),
+                                    ("Optimized",result.best)):
+                fig.add_trace(go.Scatter(x=[x*100 for x in candidate.positions_m],
+                    y=[x*100 for x in candidate.lengths_m],
+                    name=name,mode="lines+markers"))
+            fig.update_layout(xaxis_title="Boom position (cm)",
+                              yaxis_title="Element length (cm)")
+            st.plotly_chart(fig,use_container_width=True)
+            convergence=go.Figure()
+            convergence.add_trace(go.Scatter(
+                x=[row["evaluation"] for row in result.history],
+                y=[row["best_score"] for row in result.history],
+                mode="lines+markers",name="Best score"))
+            convergence.update_layout(xaxis_title="Candidate evaluation",
+                                      yaxis_title="Experimental objective score")
+            st.plotly_chart(convergence,use_container_width=True)
+            st.download_button("Download optimized NEC input",
+                data=optimized_nec_deck(result),file_name="optimized-yagi.nec",
+                mime="text/plain")
+            import csv
+            import io
+            stream=io.StringIO()
+            writer=csv.DictWriter(stream,fieldnames=["element","length_mm",
+                                                      "boom_position_mm"])
+            writer.writeheader()
+            writer.writerows(cutting_list(result))
+            st.download_button("Download candidate cutting list (CSV)",
+                data=stream.getvalue(),file_name="candidate-yagi-dimensions.csv",
+                mime="text/csv")
+        except (ValueError,np.linalg.LinAlgError,OverflowError) as exc:
+            st.error(f"Optimization could not complete: {exc}")
