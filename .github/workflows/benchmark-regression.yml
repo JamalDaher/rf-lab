@@ -1,0 +1,52 @@
+name: Numerical Benchmark Regression
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  nec2c-regression:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout candidate
+        uses: actions/checkout@v4
+        with:
+          path: candidate
+      - name: Checkout main as comparison baseline
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: baseline
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install NEC-2c
+        run: sudo apt-get update && sudo apt-get install -y nec2c
+      - name: Record NEC-2c version
+        run: nec2c -v
+      - name: Run main-branch reference suite
+        run: |
+          python -m pip install -e ./baseline
+          python -m rf_lab.benchmark_cli --executable nec2c --solver-version "CI nec2c (main)" --meshes 7 9 --output-dir baseline-results
+      - name: Install candidate code
+        run: python -m pip install -e ./candidate
+      - name: Compare candidate against main
+        id: regression
+        continue-on-error: true
+        run: |
+          python -m rf_lab.ci_benchmark --baseline baseline-results/summary.json --executable nec2c --solver-version "CI nec2c (candidate)" --output-dir candidate-results
+      - name: Upload baseline and candidate artifacts even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nec2c-regression-artifacts
+          path: |
+            baseline-results/
+            candidate-results/
+          retention-days: 30
+          if-no-files-found: warn
+      - name: Enforce regression status
+        if: steps.regression.outcome == 'failure'
+        run: |
+          echo "Numerical regression exceeded the configured maintenance thresholds."
+          exit 1
