@@ -1,0 +1,2 @@
+# Install RF Lab itself (src/ layout) and its runtime dependencies.
+-e .
