@@ -9,16 +9,19 @@ import streamlit as st
 from rf_lab.core import (dipole_length_m, quarter_wave_m, swr, return_loss_db,
                          watts_to_dbm, dbm_to_watts, free_space_path_loss_db)
 from rf_lab.yagi import design_yagi, cutting_list
+from rf_lab.measurements import (smith_grid, line_input_gamma, line_input_impedance,
+    parse_s1p, swr_from_gamma, return_loss_from_gamma, best_match, comparison_mhz)
 from rf_lab.advanced import (smith_coordinates, gamma_from_impedance, coax_loss_db,
                              delivered_power_w, COAX_DB_PER_100FT_100MHZ,
                              l_match_solutions)
 
 st.set_page_config(page_title="RF Lab", page_icon="📡", layout="wide")
 st.title("📡 RF Lab")
-st.caption("Amateur Radio Engineering Suite · v0.3.0")
-antenna, yagi, matching, power, propagation, smith, coax, lmatch = st.tabs(
+st.caption("Amateur Radio Engineering Suite · v0.4.0")
+antenna, yagi, matching, power, propagation, smith, coax, lmatch, line_tab, vna_tab = st.tabs(
     ["Antenna Designer", "3-Element Yagi", "SWR Analyzer", "RF Power",
-     "Path Loss", "Smith Chart", "Coax Loss", "L-Network"])
+     "Path Loss", "Smith Chart", "Coax Loss", "L-Network",
+     "Transmission Line", "NanoVNA S1P"])
 with antenna:
     f = st.number_input("Frequency (MHz)", min_value=0.001, value=146.0)
     k = st.slider("Length correction factor", 0.80, 1.00, 0.95)
@@ -104,14 +107,11 @@ with smith:
     chart = go.Figure()
     chart.add_trace(go.Scatter(x=np.cos(theta), y=np.sin(theta),
                                mode="lines", name="|Γ| = 1", line=dict(color="gray")))
-    # Constant-resistance circles in the reflection-coefficient plane.
-    for nr in (0, 0.2, 0.5, 1, 2, 5):
-        center = nr / (1 + nr)
-        radius = 1 / (1 + nr)
-        chart.add_trace(go.Scatter(x=center+radius*np.cos(theta),
-                                   y=radius*np.sin(theta), mode="lines",
-                                   line=dict(color="lightgray", width=1),
-                                   name=f"r={nr:g}", showlegend=False))
+    # Complete impedance grid: constant-resistance circles and reactance arcs.
+    for label, points in smith_grid():
+        chart.add_trace(go.Scatter(x=[p.real for p in points], y=[p.imag for p in points],
+                                   mode="lines", line=dict(color="lightgray", width=1),
+                                   name=label, showlegend=False))
     chart.add_trace(go.Scatter(x=[gx], y=[gy], mode="markers+text",
                                text=[f"Z={sr:g}{sx:+g}j Ω"], textposition="top center",
                                marker=dict(size=12, color="crimson"), name="Load"))
@@ -119,7 +119,7 @@ with smith:
                         yaxis=dict(range=[-1.12,1.12], zeroline=True),
                         title="Reflection-coefficient plane", height=520)
     st.plotly_chart(chart, use_container_width=True)
-    st.caption("Reference resistance circles are shown; reactance arcs are not yet drawn.")
+    st.caption("Normalized constant-resistance circles and constant-reactance arcs.")
 with coax:
     st.subheader("Approximate coaxial cable attenuation")
     cable = st.selectbox("Cable type", list(COAX_DB_PER_100FT_100MHZ))
@@ -147,3 +147,84 @@ with lmatch:
                 st.write(f"Shunt: {solution.shunt_component} = {solution.shunt_value * (1e9 if solution.shunt_component.startswith('Inductor') else 1e12):.3f} {'nH' if solution.shunt_component.startswith('Inductor') else 'pF'}")
     st.warning("Ideal lossless components, positive real resistances only. "
                "Verify component parasitics, bandwidth, power handling and actual matching with a VNA.")
+
+with line_tab:
+    st.subheader("Transmission-line impedance transformation")
+    lr = st.number_input("Line load resistance (Ω)", min_value=0.0, value=100.0)
+    lx = st.number_input("Line load reactance (Ω)", value=0.0)
+    lf = st.number_input("Line frequency (MHz)", min_value=0.001, value=146.0)
+    ll = st.number_input("Line length (m)", min_value=0.0, value=1.0)
+    lvf = st.slider("Velocity factor", min_value=0.10, max_value=1.0, value=0.66)
+    lloss = st.number_input("Matched-line loss (dB / 100 m)", min_value=0.0, value=0.0)
+    lz0 = st.number_input("Line characteristic impedance (Ω)", min_value=0.1, value=50.0)
+    load_z = complex(lr, lx)
+    try:
+        gin = line_input_gamma(load_z, lf, ll, lvf, lloss, lz0)
+        zin = line_input_impedance(load_z, lf, ll, lvf, lloss, lz0)
+        st.metric("Input impedance", f"{zin.real:.2f} {zin.imag:+.2f}j Ω")
+        st.metric("Input |Γ|", f"{abs(gin):.4f}")
+    except ValueError as exc:
+        st.error(str(exc))
+    lengths = np.linspace(0, ll, 150)
+    trajectory = [line_input_gamma(load_z, lf, float(v), lvf, lloss, lz0) for v in lengths]
+    fig = go.Figure()
+    for label, pts in smith_grid():
+        fig.add_trace(go.Scatter(x=[p.real for p in pts], y=[p.imag for p in pts],
+                                 mode="lines", line=dict(color="lightgray", width=1),
+                                 showlegend=False, name=label))
+    fig.add_trace(go.Scatter(x=[p.real for p in trajectory], y=[p.imag for p in trajectory],
+                             mode="lines+markers", name="Line transformation",
+                             marker=dict(size=3)))
+    fig.update_layout(xaxis=dict(range=[-1.1,1.1], scaleanchor="y"),
+                      yaxis=dict(range=[-1.1,1.1]), height=500,
+                      title="Source-facing reflection coefficient vs line length")
+    st.plotly_chart(fig, use_container_width=True)
+    st.caption("Ideal uniform line with constant velocity factor and specified matched-line loss.")
+with vna_tab:
+    st.subheader("NanoVNA Touchstone S1P import")
+    upload = st.file_uploader("Upload .s1p measurement", type=["s1p"])
+    design_frequency = st.number_input("Comparison design frequency (MHz)",
+                                       min_value=0.001, value=146.0)
+    if upload is not None:
+        try:
+            measurement = parse_s1p(upload.getvalue().decode("utf-8-sig"))
+        except (UnicodeDecodeError, ValueError) as exc:
+            st.error(f"Could not parse S1P: {exc}")
+        else:
+            mhz = np.array(measurement.frequencies_hz)/1e6
+            swrs = [swr_from_gamma(g) for g in measurement.gamma]
+            losses = [return_loss_from_gamma(g) for g in measurement.gamma]
+            st.caption(f"{len(mhz)} points · Reference impedance {measurement.reference_ohm:g} Ω")
+            try:
+                measured_mhz, delta_mhz = comparison_mhz(measurement, design_frequency)
+                st.metric("Minimum-SWR frequency", f"{measured_mhz:.4f} MHz",
+                          delta=f"{delta_mhz:+.4f} MHz vs design")
+                st.metric("Minimum SWR", f"{best_match(measurement)[1]:.3f}")
+            except ValueError as exc:
+                st.warning(str(exc))
+            sweep = go.Figure()
+            sweep.add_trace(go.Scatter(x=mhz, y=[v if math.isfinite(v) else None for v in swrs],
+                                       name="SWR"))
+            sweep.update_layout(title="Measured SWR", xaxis_title="Frequency (MHz)",
+                                yaxis_title="SWR")
+            st.plotly_chart(sweep, use_container_width=True)
+            lossfig = go.Figure(go.Scatter(x=mhz,
+                y=[v if math.isfinite(v) else None for v in losses], name="Return loss"))
+            lossfig.update_layout(title="Measured return loss", xaxis_title="Frequency (MHz)",
+                                  yaxis_title="Return loss (dB)")
+            st.plotly_chart(lossfig, use_container_width=True)
+            sm = go.Figure()
+            for label, pts in smith_grid():
+                sm.add_trace(go.Scatter(x=[p.real for p in pts], y=[p.imag for p in pts],
+                                        mode="lines", line=dict(color="lightgray", width=1),
+                                        showlegend=False, name=label))
+            sm.add_trace(go.Scatter(x=[g.real for g in measurement.gamma],
+                                    y=[g.imag for g in measurement.gamma],
+                                    mode="lines+markers", marker=dict(size=3),
+                                    name="Measured S11"))
+            sm.update_layout(title="Measured S11 Smith chart",
+                             xaxis=dict(range=[-1.1,1.1], scaleanchor="y"),
+                             yaxis=dict(range=[-1.1,1.1]), height=500)
+            st.plotly_chart(sm, use_container_width=True)
+            st.info("Minimum SWR is a best-match frequency, not necessarily zero-reactance resonance. "
+                    "Measurement accuracy depends on calibration and fixture setup.")
