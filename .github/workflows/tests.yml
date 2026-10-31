@@ -26,4 +26,4 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y nec2c
       - run: nec2c -v
       - run: python -m pip install -e '.[dev]'
-      - run: python -m pytest -q tests/test_nec2c_integration.py
+      - run: python -m pytest -q tests/test_nec2c_integration.py tests/test_benchmark_suite.py
