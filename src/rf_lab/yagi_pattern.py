@@ -81,7 +81,7 @@ def simulate_yagi(frequency_mhz, lengths_m, positions_m, coupling=0.25,
     peak = float(np.max(power))
     if peak <= 0 or not math.isfinite(peak):
         raise ValueError("invalid simulated power")
-    integral = np.trapezoid(np.trapezoid(power*np.sin(th),phi,axis=1),theta)
+    integral = np.trapz(np.trapz(power*np.sin(th),phi,axis=1),theta)
     directivity = 10*math.log10(4*math.pi*peak/integral)
     az = np.linspace(0,360,361)
     azpower = _power(np.full((1,361),np.pi/2),np.deg2rad(az)[None,:],p,currents)[0]
