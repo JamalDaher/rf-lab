@@ -26,20 +26,38 @@ from rf_lab.advanced import (smith_coordinates, gamma_from_impedance, coax_loss_
                              delivered_power_w, COAX_DB_PER_100FT_100MHZ,
                              l_match_solutions)
 
-st.set_page_config(page_title="RF Lab", page_icon="📡", layout="wide")
+st.set_page_config(page_title="RF Lab | RF Engineering Workbench", page_icon="📡", layout="wide", initial_sidebar_state="expanded")
+st.markdown("""<style>
+.block-container {max-width:1180px;padding-top:1.7rem;padding-bottom:4rem}
+h1,h2,h3 {letter-spacing:-.025em}
+div[data-testid="stMetric"] {border:1px solid rgba(128,140,160,.20);border-radius:12px;padding:12px 16px}
+div[data-testid="stSidebar"] {border-right:1px solid rgba(128,140,160,.18)}
+</style>""",unsafe_allow_html=True)
 st.title("📡 RF Lab")
-st.caption("Amateur Radio Engineering Suite · v1.9.0")
-antenna, yagi, matching, power, propagation, smith, coax, lmatch, line_tab, vna_tab, workbench_tab, tuning_tab, patterns_tab, yagi_pattern_tab, mom_tab, validation_tab, nec_tab, optimizer_tab = st.tabs(
-    ["Antenna Designer", "3-Element Yagi", "SWR Analyzer", "RF Power",
-     "Path Loss", "Smith Chart", "Coax Loss", "L-Network",
-     "Transmission Line", "NanoVNA S1P", "VNA Workbench", "Antenna Tuning", "Radiation Patterns", "Yagi Patterns", "Thin-Wire MoM", "Validation", "NEC Comparison", "Yagi Optimizer"])
-with antenna:
+st.caption("RF Engineering Workbench · v2.0.0 · Experimental models clearly labeled")
+st.link_button("↗ Live demo","https://rf-lab-jdaher.streamlit.app")
+with st.sidebar:
+    st.header("Explore RF Lab")
+    st.caption("Choose a workspace; only the selected tool is shown.")
+    category=st.radio("Workspace",["Design & optimize","Measure & match","RF calculators","Simulate & validate"],label_visibility="collapsed")
+    options={
+        "Design & optimize": ["Antenna Designer","3-Element Yagi","Yagi Patterns","Yagi Optimizer"],
+        "Measure & match": ["SWR Analyzer","Smith Chart","L-Network","NanoVNA S1P","VNA Workbench","Antenna Tuning"],
+        "RF calculators": ["RF Power","Path Loss","Coax Loss","Transmission Line"],
+        "Simulate & validate": ["Radiation Patterns","Thin-Wire MoM","Validation","NEC Comparison"],
+    }
+    section=st.selectbox("Tool",options[category],key="rf_section_"+category)
+    st.divider()
+    st.caption("Experimental simulations require independent measurement.")
+    st.link_button("GitHub source","https://github.com/JamalDaher/rf-lab")
+st.subheader(section)
+if section == "Antenna Designer":
     f = st.number_input("Frequency (MHz)", min_value=0.001, value=146.0)
     k = st.slider("Length correction factor", 0.80, 1.00, 0.95)
     st.metric("Half-wave dipole length", f"{dipole_length_m(f,k):.3f} m")
     st.metric("Each arm / quarter-wave vertical", f"{quarter_wave_m(f,k):.3f} m")
     st.info("Approximate starting dimensions; verify resonance with measurements.")
-with yagi:
+if section == "3-Element Yagi":
     band = st.selectbox("Frequency preset", ["2 m (146 MHz)", "70 cm (435 MHz)", "Custom"])
     default = {"2 m (146 MHz)": 146.0, "70 cm (435 MHz)": 435.0}.get(band, 146.0)
     yf = st.number_input("Yagi frequency (MHz)", min_value=0.001, value=default, key=f"yagi_frequency_{band}")
@@ -80,7 +98,7 @@ with yagi:
         st.warning("Heuristic starting dimensions, not a validated tape-measure build. "
                    "Element width, mounting and feed matching affect resonance and SWR. "
                    "Tune with an antenna analyzer; keep clear of overhead power lines.")
-with matching:
+if section == "SWR Analyzer":
     r = st.number_input("Resistance (Ω)", min_value=0.0, value=75.0)
     x = st.number_input("Reactance (Ω)", value=0.0)
     z0 = st.number_input("Reference impedance (Ω)", min_value=0.1, value=50.0)
@@ -92,12 +110,12 @@ with matching:
     fig = go.Figure(go.Scatter(x=resistances, y=[swr(complex(v,x),z0) for v in resistances]))
     fig.update_layout(xaxis_title="Resistance (Ω)", yaxis_title="SWR")
     st.plotly_chart(fig, use_container_width=True)
-with power:
+if section == "RF Power":
     w = st.number_input("Transmit power (W)", min_value=0.000001, value=5.0)
     st.metric("dBm", f"{watts_to_dbm(w):.2f}")
     st.metric("dBW", f"{watts_to_dbm(w)-30:.2f}")
     st.caption(f"Reverse conversion: {dbm_to_watts(watts_to_dbm(w)):.6g} W")
-with propagation:
+if section == "Path Loss":
     frequency = st.number_input("Carrier frequency (MHz)", min_value=0.001, value=146.0)
     distance = st.number_input("Distance (km)", min_value=0.001, value=10.0)
     st.metric("Free-space path loss", f"{free_space_path_loss_db(frequency,distance):.2f} dB")
@@ -107,7 +125,7 @@ with propagation:
     st.plotly_chart(fig, use_container_width=True)
     st.info("Ideal unobstructed free space only; terrain and foliage are not modeled.")
 
-with smith:
+if section == "Smith Chart":
     st.subheader("Impedance Smith chart")
     sr = st.number_input("Load resistance (Ω)", min_value=0.0, value=75.0, key="smith_r")
     sx = st.number_input("Load reactance (Ω)", value=25.0, key="smith_x")
@@ -131,7 +149,7 @@ with smith:
                         title="Reflection-coefficient plane", height=520)
     st.plotly_chart(chart, use_container_width=True)
     st.caption("Normalized constant-resistance circles and constant-reactance arcs.")
-with coax:
+if section == "Coax Loss":
     st.subheader("Approximate coaxial cable attenuation")
     cable = st.selectbox("Cable type", list(COAX_DB_PER_100FT_100MHZ))
     cf = st.number_input("Coax frequency (MHz)", min_value=0.001, value=146.0)
@@ -142,7 +160,7 @@ with coax:
     st.metric("Estimated output power", f"{delivered_power_w(input_w,loss):.2f} W")
     st.info("Illustrative cable figures and sqrt(f) scaling. Excludes connectors, "
             "mismatch, temperature and datasheet-specific performance.")
-with lmatch:
+if section == "L-Network":
     st.subheader("Ideal resistive L-network matching")
     source = st.number_input("Source resistance (Ω)", min_value=0.001, value=50.0)
     load = st.number_input("Load resistance (Ω)", min_value=0.001, value=200.0)
@@ -159,7 +177,7 @@ with lmatch:
     st.warning("Ideal lossless components, positive real resistances only. "
                "Verify component parasitics, bandwidth, power handling and actual matching with a VNA.")
 
-with line_tab:
+if section == "Transmission Line":
     st.subheader("Transmission-line impedance transformation")
     lr = st.number_input("Line load resistance (Ω)", min_value=0.0, value=100.0)
     lx = st.number_input("Line load reactance (Ω)", value=0.0)
@@ -191,7 +209,7 @@ with line_tab:
                       title="Source-facing reflection coefficient vs line length")
     st.plotly_chart(fig, use_container_width=True)
     st.caption("Ideal uniform line with constant velocity factor and specified matched-line loss.")
-with vna_tab:
+if section == "NanoVNA S1P":
     st.subheader("NanoVNA Touchstone S1P import")
     upload = st.file_uploader("Upload .s1p measurement", type=["s1p"])
     design_frequency = st.number_input("Comparison design frequency (MHz)",
@@ -240,7 +258,7 @@ with vna_tab:
             st.info("Minimum SWR is a best-match frequency, not necessarily zero-reactance resonance. "
                     "Measurement accuracy depends on calibration and fixture setup.")
 
-with workbench_tab:
+if section == "VNA Workbench":
     st.subheader("NanoVNA measurement workbench")
     files = st.file_uploader("Upload up to five S1P sweeps", type=["s1p"],
                              accept_multiple_files=True, key="workbench_files")
@@ -328,7 +346,7 @@ with workbench_tab:
                 st.info("Zero-reactance crossings are interpolated between samples. "
                         "Reference-plane correction is not a replacement for VNA calibration.")
 
-with tuning_tab:
+if section == "Antenna Tuning":
     st.subheader("Antenna tuning assistant")
     st.caption("First-order length guidance for an adjustable resonant element, not a full antenna model.")
     target = st.number_input("Tuning target (MHz)", min_value=0.001, value=146.0,
@@ -414,7 +432,7 @@ with tuning_tab:
                "with element length. Do not cut to the full estimate without "
                "small adjustments and repeated measurements.")
 
-with patterns_tab:
+if section == "Radiation Patterns":
     st.subheader("Interactive antenna radiation patterns")
     st.caption("Idealized normalized far-field models — not an electromagnetic solver or coverage prediction.")
     model = st.selectbox("Antenna model", ANTENNA_TYPES, key="pattern_model")
@@ -459,7 +477,7 @@ with patterns_tab:
             "symmetric and assume ideal free space or perfect ground. "
             "Frequency affects wavelength but not the normalized ideal pattern.")
 
-with yagi_pattern_tab:
+if section == "Yagi Patterns":
     st.subheader("3-element Yagi radiation-pattern explorer")
     st.caption("Exploratory coupled-element surrogate; not a validated NEC or thin-wire EM solver.")
     yf_pattern = st.number_input("Yagi pattern frequency (MHz)", min_value=0.001,
@@ -524,7 +542,7 @@ with yagi_pattern_tab:
                "physical mutual impedances. Directivity and front/back values "
                "are illustrative and must not be treated as verified antenna gain.")
 
-with mom_tab:
+if section == "Thin-Wire MoM":
     st.subheader("Experimental thin-wire EFIE antenna solver")
     st.error("Research prototype: numerical results are NOT validated. "
              "Feed impedance and SWR can be seriously inaccurate and mesh-dependent. "
@@ -595,7 +613,7 @@ with mom_tab:
     st.markdown("See [solver assumptions](https://github.com/JamalDaher/rf-lab/blob/main/docs/thin-wire-mom.md) "
                 "after this version is merged.")
 
-with validation_tab:
+if section == "Validation":
     st.subheader("Numerical validation diagnostics")
     st.warning("These diagnostics DO NOT validate the EFIE solver against NEC "
                "or measured antennas. No engineering-grade accuracy claim.")
@@ -636,7 +654,7 @@ with validation_tab:
     st.markdown("[Read the validation limitations and outstanding acceptance "
                 "gates](https://github.com/JamalDaher/rf-lab/blob/main/docs/validation-v1.md)")
 
-with nec_tab:
+if section == "NEC Comparison":
     st.subheader("NEC-2 / NEC-4 reference comparison")
     st.warning("Requires independently generated NEC results. RF Lab does not "
                "run NEC or include a verified NEC benchmark. Comparisons are "
@@ -696,7 +714,7 @@ with nec_tab:
                     st.warning("Compare geometry, excitation and pattern "
                                "normalization before interpreting these errors.")
 
-with nec_tab:
+if section == "NEC Comparison":
     st.divider()
     st.subheader("Generate a NEC-2 input deck")
     st.caption("Creates a free-space 3-element Yagi model for an independently "
@@ -727,7 +745,7 @@ with nec_tab:
             "format for comparison above. This release does not claim a "
             "completed automated solver-to-JSON pipeline.")
 
-with nec_tab:
+if section == "NEC Comparison":
     st.divider()
     st.subheader("Local NEC-2 benchmark reports")
     st.caption("Run the trusted NEC executable on your own computer with "
@@ -764,7 +782,7 @@ with nec_tab:
         except (ValueError,TypeError,KeyError,UnicodeDecodeError) as exc:
             st.error(f"Could not read local benchmark report: {exc}")
 
-with nec_tab:
+if section == "NEC Comparison":
     st.divider()
     st.subheader("NEC radiation pattern comparison")
     st.caption("Available only for reports with successfully parsed NEC "
@@ -792,7 +810,7 @@ with nec_tab:
         except (ValueError,KeyError,TypeError,UnicodeDecodeError) as exc:
             st.error(f"Unable to display radiation comparison: {exc}")
 
-with nec_tab:
+if section == "NEC Comparison":
     st.divider()
     st.subheader("Scientific benchmark suite — mesh sensitivity")
     st.caption("Upload summary.json produced by the local NEC-2c benchmark "
@@ -839,7 +857,7 @@ with nec_tab:
         except (ValueError,KeyError,TypeError,UnicodeDecodeError) as exc:
             st.error(f"Invalid benchmark summary: {exc}")
 
-with nec_tab:
+if section == "NEC Comparison":
     st.divider()
     st.subheader("Validation dashboard & PDF reports")
     st.caption("Compare two compatible mesh benchmarks, generate a PDF, "
@@ -882,7 +900,7 @@ with nec_tab:
         except (ValueError,TypeError,KeyError,UnicodeDecodeError) as exc:
             st.error(f"Benchmark validation failed: {exc}")
 
-with optimizer_tab:
+if section == "Yagi Optimizer":
     st.subheader("Experimental 3-element Yagi optimizer")
     st.warning("Optimization uses an experimental, unvalidated EFIE model. "
                "Scores are not measured antenna gain, match or performance. "
