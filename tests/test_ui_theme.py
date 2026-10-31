@@ -1,7 +1,6 @@
 """Static UI smoke tests to catch accidental loss of theme and navigation."""
 import ast
 from pathlib import Path
-import tomllib
 
 ROOT=Path(__file__).resolve().parents[1]
 
@@ -16,8 +15,7 @@ def test_app_syntax_and_navigation():
     assert "rf-lab-jdaher.streamlit.app" not in source
 
 def test_streamlit_theme():
-    with (ROOT/".streamlit"/"config.toml").open("rb") as file:
-        cfg=tomllib.load(file)
-    assert cfg["theme"]["base"]=="dark"
-    assert cfg["theme"]["primaryColor"].startswith("#")
-    assert cfg["client"]["toolbarMode"]=="minimal"
+    cfg=(ROOT/".streamlit"/"config.toml").read_text(encoding="utf-8")
+    assert 'base = "dark"' in cfg
+    assert 'primaryColor = "#39C6C0"' in cfg
+    assert 'toolbarMode = "minimal"' in cfg
