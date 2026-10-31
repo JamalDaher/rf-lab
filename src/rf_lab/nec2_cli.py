@@ -12,6 +12,7 @@ from .nec2_pipeline import run_benchmark, report_json
 
 def main(argv=None):
     p=argparse.ArgumentParser(description=__doc__)
+    p.add_argument("--adapter",choices=["generic","nec2c"],default="nec2c")
     p.add_argument("--executable",required=True,
                    help="Trusted local NEC-2 executable (never an uploaded binary)")
     p.add_argument("--solver-version",required=True)
@@ -27,7 +28,7 @@ def main(argv=None):
     result=run_benchmark(args.frequency_mhz,lengths,positions,args.executable,
                          args.solver_version,wire_radius_mm=args.radius_mm,
                          segments_per_element=args.segments,
-                         timeout_seconds=args.timeout)
+                         timeout_seconds=args.timeout,adapter=args.adapter)
     destination=Path(args.output_dir)
     destination.mkdir(parents=True,exist_ok=True)
     (destination/"model.nec").write_text(result.deck,encoding="utf-8")

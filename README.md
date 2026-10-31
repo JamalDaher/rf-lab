@@ -2,7 +2,7 @@
 
 An open-source amateur radio engineering toolkit built with Python and Streamlit.
 
-## Features (v1.3.0)
+## Features (v1.4.0)
 
 - **Local NEC-2 benchmark pipeline:** optional local CLI execution, impedance-only comparison, reproducibility hashes, JSON report import (not yet tested with a real NEC binary)
 - **NEC-2 deck generator:** download a reproducible Yagi .nec model, with an opt-in local executable adapter (no NEC executable bundled; not yet an end-to-end automated benchmark)
@@ -28,7 +28,7 @@ An open-source amateur radio engineering toolkit built with Python and Streamlit
 Read [Yagi assumptions](docs/yagi-designer.md), [advanced RF models](docs/advanced-rf.md), [transmission lines and Touchstone](docs/measurements.md), [NanoVNA workbench](docs/nanovna-workbench.md), [antenna tuning](docs/antenna-tuning.md), [radiation patterns](docs/radiation-patterns.md
 docs/yagi-patterns.md), and [Yagi pattern limitations](docs/yagi-patterns.md), and [experimental thin-wire EFIE limitations](docs/thin-wire-mom.md).
 
-## v1.3.0 validation status
+## v1.4.0 validation status
 
 This release provides numerical diagnostics, **not a validated antenna solver**. See [validation report and outstanding acceptance gates](docs/validation-v1.md). Physical impedance, SWR and gain predictions remain experimental.
 
@@ -37,3 +37,5 @@ See [NEC comparison schema and limitations](docs/nec-reference-comparison.md). T
 See [NEC-2 local runner limitations](docs/nec2-runner.md). Real NEC reference runs and verified output fixtures are still outstanding.
 
 See [local NEC-2 pipeline and limitations](docs/nec2-pipeline.md). The solver is not bundled and the comparison is not yet physically validated.
+
+NEC-2c support: [real solver CI smoke test and setup](docs/nec2c-integration.md). A passing smoke test is not numerical accuracy validation.
