@@ -35,7 +35,6 @@ div[data-testid="stSidebar"] {border-right:1px solid rgba(128,140,160,.18)}
 </style>""",unsafe_allow_html=True)
 st.title("📡 RF Lab")
 st.caption("RF Engineering Workbench · v2.0.0 · Experimental models clearly labeled")
-st.link_button("↗ Live demo","https://rf-lab-jdaher.streamlit.app")
 with st.sidebar:
     st.header("Explore RF Lab")
     st.caption("Choose a workspace; only the selected tool is shown.")
