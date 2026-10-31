@@ -10,13 +10,13 @@ def sweep(resonance_mhz=146.0):
     return S1P(frequencies, gammas, 50)
 
 
-def test_high_resonance_shortens():
+def test_high_resonance_lengthens():
     advice = tuning_advice(sweep(148), 146, 1000, 0)
     assert advice.direction == "lengthen"
     assert advice.estimated_change_mm == pytest.approx(1000*(148/146-1))
 
 
-def test_low_resonance_lengthens():
+def test_low_resonance_shortens():
     advice = tuning_advice(sweep(144), 146, 1000, 0)
     assert advice.direction == "shorten"
     assert advice.estimated_change_mm < 0
