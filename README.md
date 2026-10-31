@@ -2,11 +2,13 @@
 
 An open-source amateur radio engineering toolkit built with Python and Streamlit.
 
-## Features (v0.3.0)
+## Features (v0.4.0)
 
 - Half-wave dipole and quarter-wave vertical starting dimensions
 - **Three-element Yagi designer:** 2 m and 70 cm presets, custom frequency, adjustable driven-element gap, interactive scaled boom layout and downloadable CSV cutting list
-- Smith chart with complex impedance plotting and constant-resistance circles
+- Complete impedance Smith chart with resistance circles and reactance arcs
+- Transmission-line simulator with velocity factor, length, loss and input impedance trajectory
+- NanoVNA Touchstone S1P upload (RI/MA/DB), SWR and return-loss plots, Smith trace and design-frequency comparison
 - Coaxial cable loss and estimated matched-line delivered power (RG-58, RG-8X, RG-213, LMR-400)
 - Ideal resistive L-network matching, with two component solutions
 - Complex impedance, reflection coefficient, SWR and return loss
@@ -16,6 +18,8 @@ An open-source amateur radio engineering toolkit built with Python and Streamlit
 **Important:** Antenna dimensions are simplified starting approximations, not electromagnetic simulation or validated tape-measure construction dimensions. Tune with an antenna analyzer. Free-space loss does not predict real-world coverage.
 
 Read [Yagi design assumptions and build cautions](docs/yagi-designer.md
+docs/advanced-rf.md
+docs/measurements.md
 docs/advanced-rf.md) and [advanced RF model assumptions](docs/advanced-rf.md).
 
 ## Quick start
@@ -46,9 +50,11 @@ app.py
 src/rf_lab/core.py
 src/rf_lab/yagi.py
 src/rf_lab/advanced.py
+src/rf_lab/measurements.py
 tests/test_core.py
 tests/test_yagi.py
 tests/test_advanced.py
+tests/test_measurements.py
 docs/yagi-designer.md
 .github/workflows/tests.yml
 pyproject.toml
@@ -57,7 +63,7 @@ pyproject.toml
 ## Roadmap
 
 - Calibrated tape-measure Yagi construction presets and matching networks
-- Datasheet-calibrated transmission-line and coax loss models
+- Datasheet-calibrated coax loss and line models
 - Numerical antenna solver and radiation patterns
 - SDR signal analysis
 
