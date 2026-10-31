@@ -28,7 +28,7 @@ from rf_lab.advanced import (smith_coordinates, gamma_from_impedance, coax_loss_
 
 st.set_page_config(page_title="RF Lab", page_icon="📡", layout="wide")
 st.title("📡 RF Lab")
-st.caption("Amateur Radio Engineering Suite · v1.7.0")
+st.caption("Amateur Radio Engineering Suite · v1.8.0")
 antenna, yagi, matching, power, propagation, smith, coax, lmatch, line_tab, vna_tab, workbench_tab, tuning_tab, patterns_tab, yagi_pattern_tab, mom_tab, validation_tab, nec_tab = st.tabs(
     ["Antenna Designer", "3-Element Yagi", "SWR Analyzer", "RF Power",
      "Path Loss", "Smith Chart", "Coax Loss", "L-Network",
