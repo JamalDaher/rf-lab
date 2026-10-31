@@ -28,7 +28,7 @@ from rf_lab.advanced import (smith_coordinates, gamma_from_impedance, coax_loss_
 
 st.set_page_config(page_title="RF Lab", page_icon="📡", layout="wide")
 st.title("📡 RF Lab")
-st.caption("Amateur Radio Engineering Suite · v1.2.0")
+st.caption("Amateur Radio Engineering Suite · v1.3.0")
 antenna, yagi, matching, power, propagation, smith, coax, lmatch, line_tab, vna_tab, workbench_tab, tuning_tab, patterns_tab, yagi_pattern_tab, mom_tab, validation_tab, nec_tab = st.tabs(
     ["Antenna Designer", "3-Element Yagi", "SWR Analyzer", "RF Power",
      "Path Loss", "Smith Chart", "Coax Loss", "L-Network",
@@ -726,3 +726,40 @@ with nec_tab:
             "raw output, and convert verified results to the reference JSON "
             "format for comparison above. This release does not claim a "
             "completed automated solver-to-JSON pipeline.")
+
+with nec_tab:
+    st.divider()
+    st.subheader("Local NEC-2 benchmark reports")
+    st.caption("Run the trusted NEC executable on your own computer with "
+               "python -m rf_lab.nec2_cli, then upload comparison.json here.")
+    st.code("python -m rf_lab.nec2_cli --executable /path/to/nec2 "
+            "--solver-version VERIFIED_VERSION --output-dir ./nec-results",
+            language="bash")
+    report_upload=st.file_uploader("Upload local comparison.json",
+                                   type=["json"],key="nec_local_report")
+    if report_upload is not None:
+        try:
+            import json
+            report=json.loads(report_upload.getvalue())
+            manifest=report["manifest"]
+            metrics=report["comparison"]
+            if (manifest["schema_version"]!=1 or
+                    manifest["reference_solver"]!="NEC-2" or
+                    not isinstance(metrics["absolute_error_ohm"],(int,float))):
+                raise ValueError("unsupported report format")
+            st.caption(f"Solver version: {manifest['solver_version']}")
+            st.caption(f"Input SHA-256: {manifest['deck_sha256']}")
+            st.metric("NEC vs experimental EFIE impedance error (Ω)",
+                      f"{metrics['absolute_error_ohm']:.3f}")
+            st.metric("Relative impedance error",
+                      f"{100*metrics['relative_error']:.2f}%")
+            st.dataframe([
+                {"Metric":"Resistance error (Ω)",
+                 "Value":metrics["resistance_error_ohm"]},
+                {"Metric":"Reactance error (Ω)",
+                 "Value":metrics["reactance_error_ohm"]}
+            ],hide_index=True,use_container_width=True)
+            st.warning("This is an imported local report, not an independently "
+                       "verified NEC reference or physical accuracy certificate.")
+        except (ValueError,TypeError,KeyError,UnicodeDecodeError) as exc:
+            st.error(f"Could not read local benchmark report: {exc}")
