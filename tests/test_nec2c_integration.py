@@ -7,6 +7,9 @@ import shutil
 import pytest
 from rf_lab.nec2_runner import generate_yagi_nec2
 from rf_lab.nec2c_adapter import run_nec2c
+from rf_lab.nec2_runner import parse_nec2_input_impedance
+from rf_lab.nec2_patterns import parse_nec2_radiation_cut
+import math
 
 @pytest.mark.skipif(shutil.which("nec2c") is None,reason="nec2c not installed")
 def test_real_nec2c_executes_yagi():
@@ -17,6 +20,12 @@ def test_real_nec2c_executes_yagi():
     assert result.returncode==0, result.output[-3000:]
     assert "ANTENNA INPUT PARAMETERS" in result.output.upper()
     assert len(result.output)>100
+    # Real solver output: catch format drift in both parsers.
+    z=parse_nec2_input_impedance(result.output)
+    assert math.isfinite(z.real) and math.isfinite(z.imag)
+    cut=parse_nec2_radiation_cut(result.output)
+    assert len(cut.phi_deg)>=3
+    assert math.isfinite(float(cut.gain_dbi.max()))
 
 def test_missing_nec2c_fails_clearly():
     with pytest.raises(ValueError,match="not installed"):
