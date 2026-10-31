@@ -10,6 +10,7 @@ from rf_lab.core import (dipole_length_m, quarter_wave_m, swr, return_loss_db,
                          watts_to_dbm, dbm_to_watts, free_space_path_loss_db)
 from rf_lab.yagi import design_yagi, cutting_list
 from rf_lab.yagi_pattern import simulate_yagi, yagi_surface
+from rf_lab.mom import solve_yagi_mom
 from rf_lab.workbench import (shift_reference_plane, resonance_frequencies_hz, compare_sweeps)
 from rf_lab.reporting import create_measurement_pdf
 from rf_lab.patterns import (ANTENNA_TYPES, radiation_mesh, elevation_cut,
@@ -24,11 +25,11 @@ from rf_lab.advanced import (smith_coordinates, gamma_from_impedance, coax_loss_
 
 st.set_page_config(page_title="RF Lab", page_icon="📡", layout="wide")
 st.title("📡 RF Lab")
-st.caption("Amateur Radio Engineering Suite · v0.8.0")
-antenna, yagi, matching, power, propagation, smith, coax, lmatch, line_tab, vna_tab, workbench_tab, tuning_tab, patterns_tab, yagi_pattern_tab = st.tabs(
+st.caption("Amateur Radio Engineering Suite · v0.9.0")
+antenna, yagi, matching, power, propagation, smith, coax, lmatch, line_tab, vna_tab, workbench_tab, tuning_tab, patterns_tab, yagi_pattern_tab, mom_tab = st.tabs(
     ["Antenna Designer", "3-Element Yagi", "SWR Analyzer", "RF Power",
      "Path Loss", "Smith Chart", "Coax Loss", "L-Network",
-     "Transmission Line", "NanoVNA S1P", "VNA Workbench", "Antenna Tuning", "Radiation Patterns", "Yagi Patterns"])
+     "Transmission Line", "NanoVNA S1P", "VNA Workbench", "Antenna Tuning", "Radiation Patterns", "Yagi Patterns", "Thin-Wire MoM"])
 with antenna:
     f = st.number_input("Frequency (MHz)", min_value=0.001, value=146.0)
     k = st.slider("Length correction factor", 0.80, 1.00, 0.95)
@@ -519,3 +520,74 @@ with yagi_pattern_tab:
     st.warning("The coupled-current model uses heuristic interactions, not "
                "physical mutual impedances. Directivity and front/back values "
                "are illustrative and must not be treated as verified antenna gain.")
+
+with mom_tab:
+    st.subheader("Experimental thin-wire EFIE antenna solver")
+    st.error("Research prototype: numerical results are NOT validated. "
+             "Feed impedance and SWR can be seriously inaccurate and mesh-dependent. "
+             "Do not use for construction, matching, gain or safety decisions.")
+    mom_freq = st.number_input("MoM frequency (MHz)", min_value=0.001,
+                                value=146.0, key="mom_frequency")
+    mom_default = design_yagi(mom_freq)
+    mom_lengths = []
+    for element in mom_default.elements:
+        mom_lengths.append(st.number_input(f"MoM {element.name} length (cm)",
+            min_value=0.1, value=round(element.length_m*100,2),
+            key=f"mom_len_{element.name}")/100)
+    mom_s1 = st.number_input("MoM reflector-to-driven spacing (cm)",
+        min_value=0.1, value=round(mom_default.elements[1].position_m*100,2))
+    mom_s2 = st.number_input("MoM driven-to-director spacing (cm)",
+        min_value=0.1, value=round((mom_default.elements[2].position_m-
+                                  mom_default.elements[1].position_m)*100,2))
+    mom_radius = st.number_input("Wire radius (mm)", min_value=0.01,
+                                 value=2.0, step=0.25)
+    mom_segments = st.select_slider("Segments per element (odd)",
+                                    options=[5,7,9,11,13,15,17,19,21],
+                                    value=9)
+    mom_positions = [0,mom_s1/100,(mom_s1+mom_s2)/100]
+    if st.button("Run experimental EFIE solve"):
+        try:
+            solution = solve_yagi_mom(mom_freq,mom_lengths,mom_positions,
+                wire_radius_mm=mom_radius,segments_per_element=mom_segments)
+        except (ValueError, np.linalg.LinAlgError) as exc:
+            st.error(f"Solver failed: {exc}")
+        else:
+            st.caption("All results below are experimental and mesh-dependent.")
+            cols = st.columns(4)
+            cols[0].metric("Feed impedance (Ω, unvalidated)",
+                f"{solution.feed_impedance_ohm.real:.1f} "
+                f"{solution.feed_impedance_ohm.imag:+.1f}j")
+            cols[1].metric("SWR (unvalidated)",f"{solution.swr_50:.2f}")
+            cols[2].metric("Directivity (dBi, unvalidated)",
+                           f"{solution.directivity_dbi:.2f}")
+            cols[3].metric("Front/back (dB, unvalidated)",
+                           f"{solution.front_to_back_db:.2f}")
+            st.caption(f"Matrix condition number: {solution.condition_number:.3g}")
+            fig_current = go.Figure()
+            for index,name in enumerate(("Reflector","Driven","Director")):
+                mask=solution.element_indices==index
+                fig_current.add_trace(go.Scatter(
+                    x=solution.segment_centers_m[mask]*100,
+                    y=np.abs(solution.currents_a[mask]),
+                    mode="lines+markers",name=name))
+            fig_current.update_layout(title="Solved current magnitudes",
+                xaxis_title="Position along element (cm)",
+                yaxis_title="Current magnitude (A)")
+            st.plotly_chart(fig_current,use_container_width=True)
+            ca,ce=st.columns(2)
+            with ca:
+                fa=go.Figure(go.Scatterpolar(theta=solution.azimuth_deg,
+                    r=np.maximum(solution.azimuth_db,-40)+40,mode="lines"))
+                fa.update_layout(title="Azimuth (0° toward director)",
+                    polar=dict(radialaxis=dict(range=[0,40])))
+                st.plotly_chart(fa,use_container_width=True)
+            with ce:
+                fe=go.Figure(go.Scatterpolar(theta=solution.elevation_deg,
+                    r=np.maximum(solution.elevation_db,-40)+40,mode="lines"))
+                fe.update_layout(title="Elevation from element axis",
+                    polar=dict(radialaxis=dict(range=[0,40])))
+                st.plotly_chart(fe,use_container_width=True)
+            st.info("Change the segment count and rerun to inspect mesh "
+                    "sensitivity. Stability alone does not establish physical accuracy.")
+    st.markdown("See [solver assumptions](https://github.com/JamalDaher/rf-lab/blob/main/docs/thin-wire-mom.md) "
+                "after this version is merged.")
