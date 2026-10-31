@@ -2,18 +2,23 @@
 import csv
 import io
 import math
+import cmath
 import numpy as np
 import plotly.graph_objects as go
 import streamlit as st
 from rf_lab.core import (dipole_length_m, quarter_wave_m, swr, return_loss_db,
                          watts_to_dbm, dbm_to_watts, free_space_path_loss_db)
 from rf_lab.yagi import design_yagi, cutting_list
+from rf_lab.advanced import (smith_coordinates, gamma_from_impedance, coax_loss_db,
+                             delivered_power_w, COAX_DB_PER_100FT_100MHZ,
+                             l_match_solutions)
 
 st.set_page_config(page_title="RF Lab", page_icon="📡", layout="wide")
 st.title("📡 RF Lab")
-st.caption("Amateur Radio Engineering Suite · v0.2.0")
-antenna, yagi, matching, power, propagation = st.tabs(
-    ["Antenna Designer", "3-Element Yagi", "SWR Analyzer", "RF Power", "Path Loss"])
+st.caption("Amateur Radio Engineering Suite · v0.3.0")
+antenna, yagi, matching, power, propagation, smith, coax, lmatch = st.tabs(
+    ["Antenna Designer", "3-Element Yagi", "SWR Analyzer", "RF Power",
+     "Path Loss", "Smith Chart", "Coax Loss", "L-Network"])
 with antenna:
     f = st.number_input("Frequency (MHz)", min_value=0.001, value=146.0)
     k = st.slider("Length correction factor", 0.80, 1.00, 0.95)
@@ -87,3 +92,58 @@ with propagation:
     fig.update_layout(xaxis_title="Distance (km)", yaxis_title="Path loss (dB)")
     st.plotly_chart(fig, use_container_width=True)
     st.info("Ideal unobstructed free space only; terrain and foliage are not modeled.")
+
+with smith:
+    st.subheader("Impedance Smith chart")
+    sr = st.number_input("Load resistance (Ω)", min_value=0.0, value=75.0, key="smith_r")
+    sx = st.number_input("Load reactance (Ω)", value=25.0, key="smith_x")
+    sz0 = st.number_input("Reference impedance (Ω)", min_value=0.1, value=50.0, key="smith_z0")
+    gx, gy = smith_coordinates(complex(sr, sx), sz0)
+    st.metric("Reflection coefficient magnitude", f"{abs(complex(gx,gy)):.4f}")
+    theta = np.linspace(0, 2*np.pi, 361)
+    chart = go.Figure()
+    chart.add_trace(go.Scatter(x=np.cos(theta), y=np.sin(theta),
+                               mode="lines", name="|Γ| = 1", line=dict(color="gray")))
+    # Constant-resistance circles in the reflection-coefficient plane.
+    for nr in (0, 0.2, 0.5, 1, 2, 5):
+        center = nr / (1 + nr)
+        radius = 1 / (1 + nr)
+        chart.add_trace(go.Scatter(x=center+radius*np.cos(theta),
+                                   y=radius*np.sin(theta), mode="lines",
+                                   line=dict(color="lightgray", width=1),
+                                   name=f"r={nr:g}", showlegend=False))
+    chart.add_trace(go.Scatter(x=[gx], y=[gy], mode="markers+text",
+                               text=[f"Z={sr:g}{sx:+g}j Ω"], textposition="top center",
+                               marker=dict(size=12, color="crimson"), name="Load"))
+    chart.update_layout(xaxis=dict(range=[-1.12,1.12], scaleanchor="y", zeroline=True),
+                        yaxis=dict(range=[-1.12,1.12], zeroline=True),
+                        title="Reflection-coefficient plane", height=520)
+    st.plotly_chart(chart, use_container_width=True)
+    st.caption("Reference resistance circles are shown; reactance arcs are not yet drawn.")
+with coax:
+    st.subheader("Approximate coaxial cable attenuation")
+    cable = st.selectbox("Cable type", list(COAX_DB_PER_100FT_100MHZ))
+    cf = st.number_input("Coax frequency (MHz)", min_value=0.001, value=146.0)
+    length = st.number_input("Cable length (ft)", min_value=0.0, value=50.0)
+    input_w = st.number_input("Input power (W)", min_value=0.001, value=10.0)
+    loss = coax_loss_db(cable, cf, length)
+    st.metric("Estimated matched-line loss", f"{loss:.2f} dB")
+    st.metric("Estimated output power", f"{delivered_power_w(input_w,loss):.2f} W")
+    st.info("Illustrative cable figures and sqrt(f) scaling. Excludes connectors, "
+            "mismatch, temperature and datasheet-specific performance.")
+with lmatch:
+    st.subheader("Ideal resistive L-network matching")
+    source = st.number_input("Source resistance (Ω)", min_value=0.001, value=50.0)
+    load = st.number_input("Load resistance (Ω)", min_value=0.001, value=200.0)
+    mf = st.number_input("Match frequency (MHz)", min_value=0.001, value=146.0)
+    solutions = l_match_solutions(source, load, mf)
+    if not solutions:
+        st.success("Already matched: no L-network required.")
+    else:
+        for index, solution in enumerate(solutions, 1):
+            with st.container(border=True):
+                st.markdown(f"**Solution {index}: {solution.topology}**")
+                st.write(f"Series: {solution.series_component} = {solution.series_value * (1e9 if solution.series_component.startswith('Inductor') else 1e12):.3f} {'nH' if solution.series_component.startswith('Inductor') else 'pF'}")
+                st.write(f"Shunt: {solution.shunt_component} = {solution.shunt_value * (1e9 if solution.shunt_component.startswith('Inductor') else 1e12):.3f} {'nH' if solution.shunt_component.startswith('Inductor') else 'pF'}")
+    st.warning("Ideal lossless components, positive real resistances only. "
+               "Verify component parasitics, bandwidth, power handling and actual matching with a VNA.")
