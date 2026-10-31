@@ -2,9 +2,10 @@
 
 An open-source amateur radio engineering toolkit built with Python and Streamlit.
 
-## Features (v0.8.0)
+## Features (v0.9.0)
 
 - Half-wave dipole and quarter-wave vertical starting dimensions
+- **Experimental thin-wire EFIE solver:** pulse-basis current distribution, numerical impedance and SWR, polar patterns and mesh sensitivity controls (NOT validated against NEC or analytical benchmarks)
 - **Yagi radiation-pattern explorer:** adjustable three-element geometry, coupled-element surrogate, 2D/3D plots, illustrative directivity and front-to-back ratio
 - **Three-element Yagi designer:** 2 m and 70 cm presets, custom frequency, adjustable driven-element gap, interactive scaled boom layout and downloadable CSV cutting list
 - Complete impedance Smith chart with resistance circles and reactance arcs
@@ -21,4 +22,4 @@ An open-source amateur radio engineering toolkit built with Python and Streamlit
 **Important:** Antenna dimensions are simplified starting approximations, not electromagnetic simulation or validated tape-measure construction dimensions. Tune with an antenna analyzer. Free-space loss does not predict real-world coverage.
 
 Read [Yagi assumptions](docs/yagi-designer.md), [advanced RF models](docs/advanced-rf.md), [transmission lines and Touchstone](docs/measurements.md), [NanoVNA workbench](docs/nanovna-workbench.md), [antenna tuning](docs/antenna-tuning.md), [radiation patterns](docs/radiation-patterns.md
-docs/yagi-patterns.md), and [Yagi pattern limitations](docs/yagi-patterns.md).
+docs/yagi-patterns.md), and [Yagi pattern limitations](docs/yagi-patterns.md), and [experimental thin-wire EFIE limitations](docs/thin-wire-mom.md).
