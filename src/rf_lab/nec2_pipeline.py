@@ -12,6 +12,7 @@ from pathlib import Path
 
 from .nec2_runner import generate_yagi_nec2, run_nec2, parse_nec2_input_impedance
 from .mom import solve_yagi_mom
+from .nec2c_adapter import run_nec2c
 
 @dataclass(frozen=True)
 class PipelineResult:
@@ -38,13 +39,16 @@ def compare_impedance(model_z: complex, reference_z: complex) -> dict:
 
 def run_benchmark(frequency_mhz, lengths_m, positions_m, executable,
                   solver_version, wire_radius_mm=2.0,
-                  segments_per_element=9, timeout_seconds=30):
+                  segments_per_element=9, timeout_seconds=30, adapter="generic"):
     """Run local solver; fail closed on nonzero status or unknown NEC format."""
     if not isinstance(solver_version,str) or not solver_version.strip():
         raise ValueError("solver_version is required for provenance")
     deck=generate_yagi_nec2(frequency_mhz,lengths_m,positions_m,
                             wire_radius_mm,segments_per_element)
-    run=run_nec2(deck,executable,timeout_seconds)
+    if adapter not in ("generic","nec2c"):
+        raise ValueError("adapter must be generic or nec2c")
+    run=(run_nec2c if adapter=="nec2c" else run_nec2)(
+        deck,executable,timeout_seconds)
     if run.returncode!=0:
         raise RuntimeError(f"NEC solver exited with status {run.returncode}")
     if not run.output.strip():
@@ -57,6 +61,7 @@ def run_benchmark(frequency_mhz, lengths_m, positions_m, executable,
     manifest={
         "schema_version":1,
         "reference_solver":"NEC-2",
+        "adapter":adapter,
         "solver_version":solver_version.strip(),
         "solver_executable":str(Path(executable).resolve()),
         "generated_at_utc":datetime.now(timezone.utc).isoformat(),
