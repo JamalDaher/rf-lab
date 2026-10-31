@@ -9,6 +9,7 @@ import streamlit as st
 from rf_lab.core import (dipole_length_m, quarter_wave_m, swr, return_loss_db,
                          watts_to_dbm, dbm_to_watts, free_space_path_loss_db)
 from rf_lab.yagi import design_yagi, cutting_list
+from rf_lab.yagi_pattern import simulate_yagi, yagi_surface
 from rf_lab.workbench import (shift_reference_plane, resonance_frequencies_hz, compare_sweeps)
 from rf_lab.reporting import create_measurement_pdf
 from rf_lab.patterns import (ANTENNA_TYPES, radiation_mesh, elevation_cut,
@@ -23,11 +24,11 @@ from rf_lab.advanced import (smith_coordinates, gamma_from_impedance, coax_loss_
 
 st.set_page_config(page_title="RF Lab", page_icon="📡", layout="wide")
 st.title("📡 RF Lab")
-st.caption("Amateur Radio Engineering Suite · v0.7.0")
-antenna, yagi, matching, power, propagation, smith, coax, lmatch, line_tab, vna_tab, workbench_tab, tuning_tab, patterns_tab = st.tabs(
+st.caption("Amateur Radio Engineering Suite · v0.8.0")
+antenna, yagi, matching, power, propagation, smith, coax, lmatch, line_tab, vna_tab, workbench_tab, tuning_tab, patterns_tab, yagi_pattern_tab = st.tabs(
     ["Antenna Designer", "3-Element Yagi", "SWR Analyzer", "RF Power",
      "Path Loss", "Smith Chart", "Coax Loss", "L-Network",
-     "Transmission Line", "NanoVNA S1P", "VNA Workbench", "Antenna Tuning", "Radiation Patterns"])
+     "Transmission Line", "NanoVNA S1P", "VNA Workbench", "Antenna Tuning", "Radiation Patterns", "Yagi Patterns"])
 with antenna:
     f = st.number_input("Frequency (MHz)", min_value=0.001, value=146.0)
     k = st.slider("Length correction factor", 0.80, 1.00, 0.95)
@@ -453,3 +454,68 @@ with patterns_tab:
     st.info("0 dB is the pattern maximum, not dBi. The models are rotationally "
             "symmetric and assume ideal free space or perfect ground. "
             "Frequency affects wavelength but not the normalized ideal pattern.")
+
+with yagi_pattern_tab:
+    st.subheader("3-element Yagi radiation-pattern explorer")
+    st.caption("Exploratory coupled-element surrogate; not a validated NEC or thin-wire EM solver.")
+    yf_pattern = st.number_input("Yagi pattern frequency (MHz)", min_value=0.001,
+                                  value=146.0, key="yp_frequency")
+    default_design = design_yagi(yf_pattern)
+    wavelength = 299.792458/yf_pattern
+    names = ("Reflector", "Driven", "Director")
+    lengths = []
+    for name, element in zip(names, default_design.elements):
+        lengths.append(st.number_input(f"{name} length (cm)", min_value=0.1,
+            value=round(element.length_m*100, 2), key=f"yp_len_{name}"))
+    spacing1 = st.number_input("Reflector → driven spacing (cm)", min_value=0.1,
+        value=round(default_design.elements[1].position_m*100,2))
+    spacing2 = st.number_input("Driven → director spacing (cm)", min_value=0.1,
+        value=round((default_design.elements[2].position_m-
+                     default_design.elements[1].position_m)*100,2))
+    coupling = st.slider("Illustrative coupling strength (not calibrated)",
+                         min_value=0.0, max_value=0.8, value=0.25, step=0.05)
+    positions = [0, spacing1/100, (spacing1+spacing2)/100]
+    lengths_m = [length/100 for length in lengths]
+    try:
+        result = simulate_yagi(yf_pattern, lengths_m, positions, coupling, samples=91)
+        xx, yy, zz, rr = yagi_surface(yf_pattern, lengths_m, positions, coupling)
+    except (ValueError, np.linalg.LinAlgError) as exc:
+        st.error(f"Could not calculate pattern: {exc}")
+    else:
+        m1, m2 = st.columns(2)
+        m1.metric("Surrogate directivity (dBi)", f"{result.directivity_dbi:.2f}")
+        m2.metric("Forward/back ratio (dB)", f"{result.front_to_back_db:.2f}")
+        left, right = st.columns(2)
+        with left:
+            azfig = go.Figure(go.Scatterpolar(
+                theta=result.azimuth_deg,
+                r=np.maximum(result.azimuth_db,-40)+40, mode="lines"))
+            azfig.update_layout(title="Azimuth (0° toward director)",
+                polar=dict(radialaxis=dict(range=[0,40],
+                    tickvals=[0,10,20,30,40],
+                    ticktext=["-40","-30","-20","-10","0"])))
+            st.plotly_chart(azfig, use_container_width=True)
+        with right:
+            elfig = go.Figure(go.Scatterpolar(
+                theta=result.elevation_deg,
+                r=np.maximum(result.elevation_db,-40)+40, mode="lines"))
+            elfig.update_layout(title="Elevation (polar angle from element axis)",
+                polar=dict(radialaxis=dict(range=[0,40],
+                    tickvals=[0,10,20,30,40],
+                    ticktext=["-40","-30","-20","-10","0"])))
+            st.plotly_chart(elfig, use_container_width=True)
+        fig3d = go.Figure(go.Surface(x=xx,y=yy,z=zz,surfacecolor=rr,
+                                     colorscale="Viridis"))
+        fig3d.update_layout(title="3D normalized field pattern",
+            scene=dict(xaxis_title="Boom direction (X)", yaxis_title="Y",
+                       zaxis_title="Elements (Z)",aspectmode="data"),
+            height=550)
+        st.plotly_chart(fig3d, use_container_width=True)
+        st.dataframe([{"Element":name,"Length (cm)":lengths[i],
+                       "Position (cm)":positions[i]*100,
+                       "Relative current magnitude":abs(result.currents[i])}
+                      for i,name in enumerate(names)],hide_index=True,
+                     use_container_width=True)
+    st.warning("The coupled-current model uses heuristic interactions, not "
+               "physical mutual impedances. Directivity and front/back values "
+               "are illustrative and must not be treated as verified antenna gain.")
