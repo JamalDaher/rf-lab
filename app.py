@@ -28,7 +28,7 @@ from rf_lab.advanced import (smith_coordinates, gamma_from_impedance, coax_loss_
 
 st.set_page_config(page_title="RF Lab", page_icon="📡", layout="wide")
 st.title("📡 RF Lab")
-st.caption("Amateur Radio Engineering Suite · v1.3.0")
+st.caption("Amateur Radio Engineering Suite · v1.4.0")
 antenna, yagi, matching, power, propagation, smith, coax, lmatch, line_tab, vna_tab, workbench_tab, tuning_tab, patterns_tab, yagi_pattern_tab, mom_tab, validation_tab, nec_tab = st.tabs(
     ["Antenna Designer", "3-Element Yagi", "SWR Analyzer", "RF Power",
      "Path Loss", "Smith Chart", "Coax Loss", "L-Network",
@@ -732,7 +732,7 @@ with nec_tab:
     st.subheader("Local NEC-2 benchmark reports")
     st.caption("Run the trusted NEC executable on your own computer with "
                "python -m rf_lab.nec2_cli, then upload comparison.json here.")
-    st.code("python -m rf_lab.nec2_cli --executable /path/to/nec2 "
+    st.code("python -m rf_lab.nec2_cli --adapter nec2c --executable nec2c "
             "--solver-version VERIFIED_VERSION --output-dir ./nec-results",
             language="bash")
     report_upload=st.file_uploader("Upload local comparison.json",
