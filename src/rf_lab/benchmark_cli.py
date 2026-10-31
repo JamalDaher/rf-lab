@@ -1,6 +1,7 @@
 """Run reproducible local NEC-2c mesh sensitivity benchmarks."""
 import argparse
 from .benchmark_suite import run_suite,write_suite
+from .benchmark_pdf import build_pdf
 
 def main(argv=None):
     parser=argparse.ArgumentParser(description=__doc__)
@@ -21,7 +22,8 @@ def main(argv=None):
                     meshes=args.meshes,wire_radius_mm=args.radius_mm,
                     timeout_seconds=args.timeout,adapter=args.adapter)
     destination=write_suite(suite,args.output_dir)
-    print(f"Saved {len(suite.cases)} verified-execution benchmark cases to {destination}")
+    (destination/"benchmark-report.pdf").write_bytes(build_pdf(suite.summary))
+    print(f"Saved {len(suite.cases)} benchmark cases and PDF report to {destination}")
     print("Physical accuracy status: UNVALIDATED")
     return 0
 
