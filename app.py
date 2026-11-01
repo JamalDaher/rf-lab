@@ -24,6 +24,7 @@ from rf_lab.patterns import (ANTENNA_TYPES, radiation_mesh, elevation_cut,
                              azimuth_cut, pattern_db)
 from rf_lab.measurement_workflow import parse_measurement_bytes, measurement_workflow
 from rf_lab.dashboard import WORKSPACES, FEATURED, dashboard_metrics, project_previews
+from rf_lab.pro_workspace_ui import sidebar_tools, toggle_favorite, favorites
 from rf_lab.project_library import (new_project, save_library, load_library, add_measurement,
     measurement_sweep, library_zip)
 from rf_lab.tuning import (tuning_advice, tuning_comparison, add_history_entry,
@@ -90,7 +91,7 @@ h1 {font-weight:750}
 @media(prefers-reduced-motion:reduce) {
   .stButton > button, .stDownloadButton > button {transition:none}
 }
-/* v3.9.0 professional interface refinements */
+/* v4.0.0 professional interface refinements */
 :root {--rf-surface:#141F30;--rf-ink:#E9F1F8;--rf-muted:#9BAEC2}
 .rf-eyebrow {color:#39C6C0;font-size:.74rem;letter-spacing:.17em;font-weight:700;margin:.6rem 0 .7rem}
 .block-container {max-width:1320px;padding-top:1.7rem}
@@ -110,13 +111,22 @@ button:focus-visible,a:focus-visible,input:focus-visible {outline:2px solid #39C
   [data-testid="stMetricValue"] {font-size:1.45rem}
   .rf-eyebrow {font-size:.65rem;letter-spacing:.1em}
 }
+/* v4: responsive and keyboard-accessible polish */
+[data-testid="stSidebar"] {border-right:1px solid rgba(148,163,184,.22)}
+[data-testid="stSidebar"] .stButton > button {text-align:left;justify-content:flex-start}
+[data-testid="stTabs"] button {font-weight:600}
+@media(max-width:768px) {
+ [data-testid="stSidebar"] {max-width:min(92vw,350px)}
+ [data-testid="stTabs"] {overflow-x:auto}
+}
 </style>""",unsafe_allow_html=True)
 st.title("📡 RF Lab")
-st.caption("ENGINEERING WORKBENCH  /  v3.9.0")
+st.caption("ENGINEERING WORKBENCH  /  v4.0.0")
 with st.sidebar:
     st.header("Navigation")
-    st.caption("One focused tool at a time.")
-    category=st.radio("Workspace",["Home","Projects","Design & optimize","Measure & match","Signal analysis","RF calculators","Simulate & validate"],label_visibility="collapsed",key="rf_category")
+    st.caption("Design · Measure · Analyze · Validate")
+    sidebar_tools()
+    category=st.radio("Workspace",["Home","Professional workspace","Projects","Design & optimize","Measure & match","Signal analysis","RF calculators","Simulate & validate"],label_visibility="collapsed",key="rf_category")
     options={name:list(tools) for name,tools in WORKSPACES.items()}
     if category=="Home":
         section="Home"
@@ -126,7 +136,15 @@ with st.sidebar:
     st.caption("Experimental simulations require independent measurement.")
     st.link_button("GitHub source","https://github.com/JamalDaher/rf-lab")
 if section != "Home":
-    st.subheader(section)
+    st.caption("RF LAB / "+category.upper())
+    title_col,pin_col=st.columns([5,1])
+    with title_col:
+        st.subheader(section)
+    if category!="Professional workspace":
+        with pin_col:
+            pinned=(category,section) in favorites()
+            st.button("★ Pinned" if pinned else "☆ Pin",key="rf_pin_active",
+                      on_click=toggle_favorite,args=(category,section))
 
 def open_workspace(category_name, tool_name):
     """Switch both navigation controls before Streamlit instantiates them."""
@@ -134,7 +152,7 @@ def open_workspace(category_name, tool_name):
     st.session_state["rf_section_"+category_name]=tool_name
 
 if section == "Home":
-    st.markdown('<div class="rf-eyebrow">RF ENGINEERING PLATFORM · VERSION 2.8.0</div>',
+    st.markdown('<div class="rf-eyebrow">RF ENGINEERING PLATFORM · VERSION 4.0.0</div>',
                 unsafe_allow_html=True)
     st.markdown("## Your RF engineering workspace")
     st.caption("Design, build, measure and validate antenna systems in one place. "
@@ -148,6 +166,14 @@ if section == "Home":
         ("S1P measurements","measurements"),("Available tools","available_tools")]):
         with column:
             st.metric(label,metrics[key])
+    st.markdown("### Start a workflow")
+    cols=st.columns(2)
+    with cols[0]:
+        st.button("Explore guided workflows",use_container_width=True,
+                  on_click=open_workspace,args=("Professional workspace","Guided Workflows"))
+    with cols[1]:
+        st.button("Open report center",use_container_width=True,
+                  on_click=open_workspace,args=("Professional workspace","Report Center"))
     st.markdown("### Quick launch")
     for start in (0,3):
         cols=st.columns(3,gap="medium")
@@ -184,6 +210,14 @@ if section == "Home":
                 "are not validated performance guarantees. Check independent NEC "
                 "results and calibrated measurements before transmitting.")
     st.caption("Session data is temporary. Export JSON/ZIP backups from Project Library.")
+
+if section == "Guided Workflows":
+    from rf_lab.pro_workspace_ui import render_workflows
+    render_workflows()
+
+if section == "Report Center":
+    from rf_lab.pro_workspace_ui import render_reports
+    render_reports()
 
 if section == "RF Filter Design Laboratory":
     from rf_lab.filter_lab_ui import render as render_filter_lab

@@ -2,6 +2,7 @@
 from collections import Counter
 
 WORKSPACES = {
+    "Professional workspace": ("Guided Workflows","Report Center"),
     "Projects": ("Project Library",),
     "Design & optimize": ("Antenna Designer","3-Element Yagi","Construction Assistant",
         "Tape-Measure Yagi","Yagi Patterns","Yagi Optimizer","Design Workbench"),
