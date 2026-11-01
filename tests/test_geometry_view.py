@@ -25,7 +25,9 @@ def test_dimension_units():
 @pytest.mark.parametrize("view",["3D","Top view"])
 def test_plotly_view(view):
     fig=geometry_figure(design_yagi(146),view,"cm")
-    assert len(fig.data)==8
+    assert len(fig.data)==(8 if view=="3D" else 5)
+    if view=="Top view":
+        assert len(fig.layout.annotations)==3
     assert fig.layout.title.text.startswith("3-element Yagi")
     assert fig.data[0].type==("scatter3d" if view=="3D" else "scatter")
 
