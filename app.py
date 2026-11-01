@@ -22,6 +22,7 @@ from rf_lab.workbench import (shift_reference_plane, resonance_frequencies_hz, c
 from rf_lab.reporting import create_measurement_pdf
 from rf_lab.patterns import (ANTENNA_TYPES, radiation_mesh, elevation_cut,
                              azimuth_cut, pattern_db)
+from rf_lab.measurement_workflow import parse_measurement_bytes, measurement_workflow
 from rf_lab.tuning import (tuning_advice, tuning_comparison, add_history_entry,
                            history_json, load_history)
 from rf_lab.measurements import (smith_grid, line_input_gamma, line_input_impedance,
@@ -88,14 +89,14 @@ h1 {font-weight:750}
 }
 </style>""",unsafe_allow_html=True)
 st.title("📡 RF Lab")
-st.caption("RF Engineering Workbench · v2.5.0 · Experimental models clearly labeled")
+st.caption("RF Engineering Workbench · v2.6.0 · Experimental models clearly labeled")
 with st.sidebar:
     st.header("Explore RF Lab")
     st.caption("Choose a workspace; only the selected tool is shown.")
     category=st.radio("Workspace",["Home","Design & optimize","Measure & match","RF calculators","Simulate & validate"],label_visibility="collapsed",key="rf_category")
     options={
         "Design & optimize": ["Antenna Designer","3-Element Yagi","Construction Assistant","Tape-Measure Yagi","Yagi Patterns","Yagi Optimizer", "Design Workbench"],
-        "Measure & match": ["SWR Analyzer","Smith Chart","L-Network","NanoVNA S1P","VNA Workbench","Antenna Tuning"],
+        "Measure & match": ["SWR Analyzer","Smith Chart","L-Network","NanoVNA S1P","VNA Workbench","Measurement & Tuning Workbench","Antenna Tuning"],
         "RF calculators": ["RF Power","Path Loss","Coax Loss","Transmission Line"],
         "Simulate & validate": ["Radiation Patterns","Thin-Wire MoM","Validation","NEC Comparison"],
     }
@@ -154,7 +155,7 @@ if section == "Home":
             st.markdown("**Model confidence**")
             st.caption("Experimental EFIE outputs are not independently validated. "
                        "Check NEC results and real measurements before construction.")
-    st.caption("RF Lab v2.5.0 · Open-source RF engineering tools · "
+    st.caption("RF Lab v2.6.0 · Open-source RF engineering tools · "
                "Design history is local to the current session.")
 
 if section == "Antenna Designer":
@@ -561,6 +562,135 @@ if section == "VNA Workbench":
                     st.error(f"Could not create PDF report: {exc}")
                 st.info("Zero-reactance crossings are interpolated between samples. "
                         "Reference-plane correction is not a replacement for VNA calibration.")
+
+if section == "Measurement & Tuning Workbench":
+    st.caption("A guided workflow from calibrated NanoVNA sweeps to conservative "
+               "tuning advice, before/after comparison, session history and a PDF report.")
+    with st.container(border=True):
+        st.markdown("#### 1 · Configure your antenna")
+        c1,c2,c3=st.columns(3)
+        with c1:
+            mt_target=st.number_input("Target frequency (MHz)",min_value=0.001,
+                                       value=146.0,key="mt_target")
+        with c2:
+            mt_length=st.number_input("Adjustable element length (mm)",min_value=0.1,
+                                       value=1000.0,key="mt_length")
+        with c3:
+            mt_tolerance=st.number_input("Frequency tolerance (MHz)",min_value=0.0,
+                                          value=0.05,step=0.01,key="mt_tolerance")
+        mt_name=st.text_input("Antenna / session name",value="Portable Yagi",key="mt_name")
+    with st.container(border=True):
+        st.markdown("#### 2 · Import NanoVNA measurements")
+        c1,c2=st.columns(2)
+        with c1:
+            mt_before=st.file_uploader("Before tuning (.s1p)",type=["s1p"],
+                                        key="mt_before")
+        with c2:
+            mt_after=st.file_uploader("After tuning (.s1p), optional",type=["s1p"],
+                                       key="mt_after")
+        st.caption("Calibrate at the same reference plane for both sweeps. "
+                   "Touchstone v1 S11 data in RI, MA or DB format is supported.")
+    if "mt_history" not in st.session_state:
+        st.session_state.mt_history=[]
+    mt_notes=st.text_area("Build notes and changes made",key="mt_notes",
+                           placeholder="Element material, mount, calibration plane, measured trim...")
+    if mt_before is not None:
+        try:
+            mt_b=parse_measurement_bytes(mt_before.getvalue())
+            mt_a=parse_measurement_bytes(mt_after.getvalue()) if mt_after is not None else None
+            mt_result=measurement_workflow(mt_b,mt_target,mt_length,mt_a,mt_tolerance)
+        except ValueError as exc:
+            st.error(f"Measurement workflow: {exc}")
+        else:
+            st.markdown("#### 3 · Inspect measurements")
+            snap=mt_result["before"]
+            c1,c2,c3=st.columns(3)
+            c1.metric("Best match (minimum SWR)",
+                      f"{snap['best_match_mhz']:.4f} MHz" if snap["best_match_mhz"] is not None else "N/A")
+            c2.metric("Minimum SWR",
+                      f"{snap['minimum_swr']:.3f}" if snap["minimum_swr"] is not None else "N/A")
+            c3.metric("Reactance-zero resonance",
+                      f"{snap['resonance_mhz']:.4f} MHz" if snap["resonance_mhz"] is not None else "Not detected")
+            if not snap["target_covered"]:
+                st.warning("Target frequency is outside the measured sweep range.")
+            if mt_result["after"] is not None:
+                st.markdown("**Before / after summary**")
+                st.dataframe([{"Stage":label,
+                    "Best match (MHz)":s["best_match_mhz"],
+                    "Minimum SWR":s["minimum_swr"],
+                    "Reactance-zero (MHz)":s["resonance_mhz"]}
+                    for label,s in (("Before",snap),("After",mt_result["after"]))],
+                    use_container_width=True,hide_index=True)
+                st.dataframe([mt_result["comparison"]],hide_index=True,
+                             use_container_width=True)
+            swr_chart=go.Figure()
+            for label,sweep in (("Before",mt_b),("After",mt_a)):
+                if sweep is None:
+                    continue
+                swr_chart.add_trace(go.Scatter(
+                    x=[freq/1e6 for freq in sweep.frequencies_hz],
+                    y=[value if math.isfinite(value) else None for value in
+                       (swr_from_gamma(g) for g in sweep.gamma)],
+                    name=label,mode="lines"))
+            swr_chart.add_vline(x=mt_target,line_dash="dash",
+                                annotation_text="Target")
+            swr_chart.update_layout(title="Measured SWR comparison",
+                                     xaxis_title="Frequency (MHz)",yaxis_title="SWR")
+            st.plotly_chart(swr_chart,use_container_width=True)
+            st.markdown("#### 4 · Tuning recommendation")
+            guidance=mt_result["advice"]
+            st.markdown(f"**Suggested direction: {guidance.direction}**")
+            if guidance.estimated_change_mm is not None:
+                st.metric("First-order length change",
+                          f"{guidance.estimated_change_mm:+.2f} mm")
+            st.info(guidance.message)
+            st.caption("The estimate applies to a single adjustable resonant element. "
+                       "Yagi coupling, feed matching and tape-blade width may change the result.")
+            st.markdown("#### 5 · Save and print")
+            if st.button("Save result to session history",key="mt_save"):
+                try:
+                    st.session_state.mt_history=add_history_entry(
+                        st.session_state.mt_history,mt_name,guidance,mt_length,mt_notes)
+                    st.success("Saved to this browser session; export JSON for persistence.")
+                except ValueError as exc:
+                    st.error(str(exc))
+            report_sweeps={"Before":mt_b}
+            if mt_a is not None:
+                report_sweeps["After"]=mt_a
+            report_notes=(f"Antenna: {mt_name}. Adjustable length: {mt_length:g} mm. "
+                          f"Tuning guidance: {guidance.direction}; "
+                          f"estimated change: {guidance.estimated_change_mm} mm. "
+                          f"Notes: {mt_notes}")
+            try:
+                mt_pdf=create_measurement_pdf(report_sweeps,mt_target,report_notes)
+                st.download_button("Download measurement and tuning PDF",mt_pdf,
+                    file_name="rf_lab_tuning_report.pdf",mime="application/pdf",
+                    key="mt_pdf",use_container_width=True)
+            except ValueError as exc:
+                st.error(str(exc))
+    with st.expander("Tuning session history · import/export",expanded=False):
+        mt_import=st.file_uploader("Import saved history (JSON)",type=["json"],
+                                    key="mt_import")
+        if mt_import is not None and st.button("Import history",key="mt_import_btn"):
+            try:
+                st.session_state.mt_history=load_history(
+                    mt_import.getvalue().decode("utf-8-sig"))
+                st.success("Imported session history.")
+            except (ValueError,UnicodeDecodeError) as exc:
+                st.error(str(exc))
+        if st.session_state.mt_history:
+            st.dataframe(st.session_state.mt_history,use_container_width=True,
+                         hide_index=True)
+            st.download_button("Export history (JSON)",
+                               history_json(st.session_state.mt_history),
+                               file_name="rf_lab_tuning_history.json",
+                               mime="application/json",key="mt_export")
+            if st.button("Clear history",key="mt_clear"):
+                st.session_state.mt_history=[]
+                st.rerun()
+    st.warning("A minimum-SWR point is not necessarily resonance. "
+               "Length estimates are first-order only: make small changes and remeasure. "
+               "No measured or modeled output certifies safe transmit power.")
 
 if section == "Antenna Tuning":
     st.subheader("Antenna tuning assistant")
