@@ -5,7 +5,7 @@ WORKSPACES = {
     "Projects": ("Project Library",),
     "Design & optimize": ("Antenna Designer","3-Element Yagi","Construction Assistant",
         "Tape-Measure Yagi","Yagi Patterns","Yagi Optimizer","Design Workbench"),
-    "Signal analysis": ("Signal Analysis Workbench","SDR Signal Laboratory","SDR Receiver Workbench","AM vs FM Noise Lab","RF Spectrum Analyzer","RF Waterfall & Signal Detection","RF Signal Classification"),
+    "Signal analysis": ("RF Signal Analysis Dashboard","Signal Analysis Workbench","SDR Signal Laboratory","SDR Receiver Workbench","AM vs FM Noise Lab","RF Spectrum Analyzer","RF Waterfall & Signal Detection","RF Signal Classification"),
     "Measure & match": ("SWR Analyzer","Smith Chart","L-Network","NanoVNA S1P",
         "VNA Workbench","Measurement & Tuning Workbench","Antenna Tuning"),
     "RF calculators": ("RF Power","Path Loss","Coax Loss","Transmission Line"),
