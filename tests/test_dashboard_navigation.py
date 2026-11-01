@@ -11,7 +11,7 @@ def test_app_compiles():
 def test_dashboard_has_default_home_and_all_featured_tools():
     source=APP.read_text(encoding="utf-8")
     ast.parse(source)
-    assert '["Home","Projects","Design & optimize","Measure & match","RF calculators","Simulate & validate"]' in source
+    assert '["Home","Projects","Design & optimize","Measure & match","Signal analysis","RF calculators","Simulate & validate"]' in source
     assert 'if section == "Home":' in source
     assert 'on_click=open_workspace,args=(group,name)' in source
     assert 'options={name:list(tools) for name,tools in WORKSPACES.items()}' in source
