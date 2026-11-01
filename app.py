@@ -23,6 +23,8 @@ from rf_lab.reporting import create_measurement_pdf
 from rf_lab.patterns import (ANTENNA_TYPES, radiation_mesh, elevation_cut,
                              azimuth_cut, pattern_db)
 from rf_lab.measurement_workflow import parse_measurement_bytes, measurement_workflow
+from rf_lab.project_library import (new_project, save_library, load_library, add_measurement,
+    measurement_sweep, library_zip)
 from rf_lab.tuning import (tuning_advice, tuning_comparison, add_history_entry,
                            history_json, load_history)
 from rf_lab.measurements import (smith_grid, line_input_gamma, line_input_impedance,
@@ -89,12 +91,13 @@ h1 {font-weight:750}
 }
 </style>""",unsafe_allow_html=True)
 st.title("📡 RF Lab")
-st.caption("RF Engineering Workbench · v2.6.0 · Experimental models clearly labeled")
+st.caption("RF Engineering Workbench · v2.7.0 · Experimental models clearly labeled")
 with st.sidebar:
     st.header("Explore RF Lab")
     st.caption("Choose a workspace; only the selected tool is shown.")
-    category=st.radio("Workspace",["Home","Design & optimize","Measure & match","RF calculators","Simulate & validate"],label_visibility="collapsed",key="rf_category")
+    category=st.radio("Workspace",["Home","Projects","Design & optimize","Measure & match","RF calculators","Simulate & validate"],label_visibility="collapsed",key="rf_category")
     options={
+        "Projects":["Project Library"],
         "Design & optimize": ["Antenna Designer","3-Element Yagi","Construction Assistant","Tape-Measure Yagi","Yagi Patterns","Yagi Optimizer", "Design Workbench"],
         "Measure & match": ["SWR Analyzer","Smith Chart","L-Network","NanoVNA S1P","VNA Workbench","Measurement & Tuning Workbench","Antenna Tuning"],
         "RF calculators": ["RF Power","Path Loss","Coax Loss","Transmission Line"],
@@ -121,6 +124,7 @@ if section == "Home":
                "Start with a tool below or open your saved designs.")
     st.markdown("#### Start here")
     featured=[
+        ("🗂️","Project Library","Keep antenna builds and measurements together.","Projects"),
         ("📐","Design Workbench","Save, compare and export Yagi antenna designs.","Design & optimize"),
         ("📡","Yagi Optimizer","Explore constrained three-element antenna candidates.","Design & optimize"),
         ("📊","NanoVNA S1P","Import Touchstone measurements and inspect matching.","Measure & match"),
@@ -155,7 +159,7 @@ if section == "Home":
             st.markdown("**Model confidence**")
             st.caption("Experimental EFIE outputs are not independently validated. "
                        "Check NEC results and real measurements before construction.")
-    st.caption("RF Lab v2.6.0 · Open-source RF engineering tools · "
+    st.caption("RF Lab v2.7.0 · Open-source RF engineering tools · "
                "Design history is local to the current session.")
 
 if section == "Antenna Designer":
@@ -426,6 +430,136 @@ if section == "Transmission Line":
                       title="Source-facing reflection coefficient vs line length")
     st.plotly_chart(fig, use_container_width=True)
     st.caption("Ideal uniform line with constant velocity factor and specified matched-line loss.")
+if section == "Project Library":
+    st.caption("Antenna projects with designs, construction checks, measurements and tuning records. "
+               "Stored in this browser session only; export a backup to retain them.")
+    if "antenna_projects" not in st.session_state:
+        st.session_state.antenna_projects=[]
+    projects=st.session_state.antenna_projects
+    with st.expander("Create a project",expanded=not bool(projects)):
+        with st.form("project_create"):
+            pn=st.text_input("Project name",value="2 m tape-measure Yagi")
+            pf=st.number_input("Target frequency (MHz)",min_value=0.001,value=146.0)
+            pnotes=st.text_area("Project notes",max_chars=2000)
+            create=st.form_submit_button("Create project")
+        if create:
+            try:
+                if len(projects)>=50:
+                    raise ValueError("Project limit of 50 reached")
+                projects.append(new_project(pn,pf,pnotes))
+                st.rerun()
+            except ValueError as exc:
+                st.error(str(exc))
+    with st.expander("Import or export library",expanded=False):
+        backup=st.file_uploader("Import RF Lab project library (JSON)",type=["json"],
+                                key="project_import")
+        if backup is not None and st.button("Import and merge by project ID",key="project_merge"):
+            try:
+                incoming=load_library(backup.getvalue())
+                merged={p["id"]:p for p in projects}
+                merged.update({p["id"]:p for p in incoming})
+                save_library(list(merged.values()))
+                st.session_state.antenna_projects=list(merged.values())
+                st.success("Projects imported. Matching IDs were replaced by imported versions.")
+                st.rerun()
+            except (ValueError,UnicodeDecodeError,TypeError) as exc:
+                st.error(str(exc))
+        if projects:
+            st.download_button("Download all projects (JSON)",save_library(projects),
+                               file_name="rf-lab-projects.json",mime="application/json")
+            st.download_button("Download project backup (ZIP)",library_zip(projects),
+                               file_name="rf-lab-projects.zip",mime="application/zip")
+    if projects:
+        st.metric("Antenna projects",len(projects))
+        st.dataframe([{"Project":p["name"],"Frequency (MHz)":p["frequency_mhz"],
+                       "Measurements":len(p["measurements"]),
+                       "Tuning entries":len(p["tuning_history"]),
+                       "Design saved":p["design"] is not None}
+                      for p in projects],hide_index=True,use_container_width=True)
+        ids={p["id"]:p for p in projects}
+        chosen=st.selectbox("Open project",list(ids),
+                            format_func=lambda k:ids[k]["name"],key="project_selected")
+        project=ids[chosen]
+        idx=next(i for i,p in enumerate(projects) if p["id"]==chosen)
+        with st.container(border=True):
+            st.markdown("#### Project details")
+            project["notes"]=st.text_area("Notes",value=project["notes"],
+                                          key="project_notes_"+chosen,max_chars=2000)
+            st.caption(f"Target: {project['frequency_mhz']:g} MHz · "
+                       f"Created: {project['created_at'][:10]}")
+            st.markdown("#### Antenna design")
+            saved=st.session_state.get("design_library",[])
+            if saved:
+                choice=st.selectbox("Attach an existing Design Workbench design",
+                                    range(len(saved)),format_func=lambda i:saved[i]["name"],
+                                    key="project_design_select")
+                if st.button("Attach selected design",key="project_attach"):
+                    project["design"]=saved[choice]
+                    st.success("Design attached to project.")
+            else:
+                st.caption("Save a design in Design Workbench first, then attach it here.")
+            if project["design"] is not None:
+                st.json(project["design"],expanded=False)
+            st.markdown("#### Construction checklist")
+            build_steps=[
+                "Verify antenna dimensions and feed arrangement",
+                "Prepare boom and mark element positions",
+                "Cut, deburr and secure elements",
+                "Install insulated feedpoint and strain relief",
+                "Inspect mechanical and electrical connections",
+                "Measure and document final resonance and SWR",
+            ]
+            checks=project["construction_checks"]
+            if len(checks)!=len(build_steps):
+                checks=[False]*len(build_steps)
+            project["construction_checks"]=[
+                st.checkbox(step,value=checks[i],key=f"project_check_{chosen}_{i}")
+                for i,step in enumerate(build_steps)]
+            st.markdown("#### NanoVNA measurements")
+            uploaded=st.file_uploader("Attach a calibrated .s1p measurement",
+                                      type=["s1p"],key="project_s1p_"+chosen)
+            if uploaded is not None and st.button("Add measurement",key="project_add_s1p"):
+                try:
+                    sweep=parse_measurement_bytes(uploaded.getvalue())
+                    projects[idx]=add_measurement(project,uploaded.name,sweep)
+                    st.success("Measurement attached.")
+                    st.rerun()
+                except ValueError as exc:
+                    st.error(str(exc))
+            if project["measurements"]:
+                from rf_lab.measurement_workflow import measurement_snapshot
+                rows=[]
+                plot=go.Figure()
+                for measurement in project["measurements"]:
+                    sweep=measurement_sweep(measurement)
+                    snapshot=measurement_snapshot(sweep,project["frequency_mhz"])
+                    rows.append({"Sweep":measurement["name"],
+                                 "Best match (MHz)":snapshot["best_match_mhz"],
+                                 "Minimum SWR":snapshot["minimum_swr"],
+                                 "Resonance (MHz)":snapshot["resonance_mhz"]})
+                    plot.add_trace(go.Scatter(x=[f/1e6 for f in sweep.frequencies_hz],
+                        y=[v if math.isfinite(v) else None for v in
+                           (swr_from_gamma(g) for g in sweep.gamma)],
+                        name=measurement["name"]))
+                st.dataframe(rows,hide_index=True,use_container_width=True)
+                plot.update_layout(xaxis_title="Frequency (MHz)",yaxis_title="SWR")
+                st.plotly_chart(plot,use_container_width=True)
+                st.download_button("Download project measurement PDF",
+                    create_measurement_pdf({
+                        f"{i+1} {m['name'][:35]}":measurement_sweep(m)
+                        for i,m in enumerate(project["measurements"])},
+                        project["frequency_mhz"],project["notes"]),
+                    file_name="rf-lab-project-measurements.pdf",mime="application/pdf")
+            st.markdown("#### Tuning history")
+            history=st.session_state.get("mt_history",[])
+            if history and st.button("Copy tuning workbench history into project",
+                                     key="project_tuning_copy"):
+                project["tuning_history"]=load_history(history_json(history))
+                st.success("Tuning history attached.")
+            if project["tuning_history"]:
+                st.dataframe(project["tuning_history"],hide_index=True,use_container_width=True)
+            st.caption("Export JSON or ZIP after editing. Browser session data is not permanent.")
+
 if section == "NanoVNA S1P":
     st.subheader("NanoVNA Touchstone S1P import")
     upload = st.file_uploader("Upload .s1p measurement", type=["s1p"])
