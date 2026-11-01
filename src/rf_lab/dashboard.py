@@ -5,7 +5,7 @@ WORKSPACES = {
     "Projects": ("Project Library",),
     "Design & optimize": ("Antenna Designer","3-Element Yagi","Construction Assistant",
         "Tape-Measure Yagi","Yagi Patterns","Yagi Optimizer","Design Workbench"),
-    "Signal analysis": ("Signal Analysis Workbench","SDR Signal Laboratory"),
+    "Signal analysis": ("Signal Analysis Workbench","SDR Signal Laboratory","SDR Receiver Workbench"),
     "Measure & match": ("SWR Analyzer","Smith Chart","L-Network","NanoVNA S1P",
         "VNA Workbench","Measurement & Tuning Workbench","Antenna Tuning"),
     "RF calculators": ("RF Power","Path Loss","Coax Loss","Transmission Line"),
@@ -17,7 +17,7 @@ FEATURED = (
     ("📏","Tape-Measure Yagi","Generate practical cut lists and build plans.","Design & optimize"),
     ("📊","Measurement & Tuning Workbench","Compare NanoVNA sweeps and tune conservatively.","Measure & match"),
     ("🧭","Smith Chart","Visualize complex impedance and matching.","Measure & match"),
-    ("📡","SDR Signal Laboratory","Explore IQ constellations, digital modulation and waterfalls.","Signal analysis"),
+    ("📻","SDR Receiver Workbench","Tune and demodulate offline AM/FM IQ signals.","Signal analysis"),
 )
 
 def dashboard_metrics(projects,designs,tuning_entries):
