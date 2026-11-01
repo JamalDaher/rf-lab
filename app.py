@@ -174,8 +174,8 @@ if section == "3-Element Yagi":
         st.metric("Reflector-to-director spacing", f"{design.boom_length_m*100:.1f} cm")
         view_col, unit_col = st.columns(2)
         with view_col:
-            drawing_view = st.segmented_control("Engineering view", ["3D", "Top view"],
-                                                default="3D", key="yagi_drawing_view")
+            drawing_view = st.radio("Engineering view", ["3D", "Top view"], horizontal=True,
+                                    key="yagi_drawing_view")
         with unit_col:
             drawing_unit = st.selectbox("Drawing units", ["cm", "in", "mm"],
                                         key="yagi_drawing_units")
