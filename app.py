@@ -11,6 +11,7 @@ from rf_lab.core import (dipole_length_m, quarter_wave_m, swr, return_loss_db,
                          watts_to_dbm, dbm_to_watts, free_space_path_loss_db)
 from rf_lab.yagi import design_yagi, cutting_list
 from rf_lab.geometry_view import geometry_figure, dimension_rows
+from rf_lab.construction import construction_plan, printable_plan_pdf
 from rf_lab.yagi_pattern import simulate_yagi, yagi_surface
 from rf_lab.mom import solve_yagi_mom
 from rf_lab.validation import mesh_sensitivity, short_dipole_directivity_check
@@ -86,13 +87,13 @@ h1 {font-weight:750}
 }
 </style>""",unsafe_allow_html=True)
 st.title("📡 RF Lab")
-st.caption("RF Engineering Workbench · v2.3.0 · Experimental models clearly labeled")
+st.caption("RF Engineering Workbench · v2.4.0 · Experimental models clearly labeled")
 with st.sidebar:
     st.header("Explore RF Lab")
     st.caption("Choose a workspace; only the selected tool is shown.")
     category=st.radio("Workspace",["Home","Design & optimize","Measure & match","RF calculators","Simulate & validate"],label_visibility="collapsed",key="rf_category")
     options={
-        "Design & optimize": ["Antenna Designer","3-Element Yagi","Yagi Patterns","Yagi Optimizer", "Design Workbench"],
+        "Design & optimize": ["Antenna Designer","3-Element Yagi","Construction Assistant","Yagi Patterns","Yagi Optimizer", "Design Workbench"],
         "Measure & match": ["SWR Analyzer","Smith Chart","L-Network","NanoVNA S1P","VNA Workbench","Antenna Tuning"],
         "RF calculators": ["RF Power","Path Loss","Coax Loss","Transmission Line"],
         "Simulate & validate": ["Radiation Patterns","Thin-Wire MoM","Validation","NEC Comparison"],
@@ -152,7 +153,7 @@ if section == "Home":
             st.markdown("**Model confidence**")
             st.caption("Experimental EFIE outputs are not independently validated. "
                        "Check NEC results and real measurements before construction.")
-    st.caption("RF Lab v2.1.0 · Open-source RF engineering tools · "
+    st.caption("RF Lab v2.4.0 · Open-source RF engineering tools · "
                "Design history is local to the current session.")
 
 if section == "Antenna Designer":
@@ -204,6 +205,53 @@ if section == "3-Element Yagi":
         st.warning("Heuristic starting dimensions, not a validated tape-measure build. "
                    "Element width, mounting and feed matching affect resonance and SWR. "
                    "Tune with an antenna analyzer; keep clear of overhead power lines.")
+if section == "Construction Assistant":
+    st.caption("Build planning for the heuristic three-element Yagi. Verify dimensions, "
+               "electrical matching and mechanical design before construction.")
+    left, right = st.columns(2)
+    with left:
+        build_frequency = st.number_input("Build frequency (MHz)", min_value=0.001,
+                                          value=146.0, key="build_frequency")
+        build_gap = st.number_input("Driven feed gap (mm)", min_value=0.1,
+                                    value=12.0, key="build_gap")
+    with right:
+        build_allowance = st.number_input("Extra trim length per physical piece (mm)",
+                                          min_value=0.0, max_value=100.0, value=10.0,
+                                          step=1.0, key="build_allowance")
+        build_unit = st.selectbox("Shop drawing units", ["cm", "in", "mm"],
+                                  key="build_unit")
+    try:
+        build_design = design_yagi(build_frequency, build_gap)
+        plan = construction_plan(build_design, build_allowance)
+    except ValueError as exc:
+        st.error(str(exc))
+    else:
+        st.plotly_chart(geometry_figure(build_design, "Top view", build_unit),
+                        use_container_width=True)
+        st.markdown("#### Cut schedule")
+        factor = {"cm":100.0, "in":39.37007874015748, "mm":1000.0}[build_unit]
+        st.dataframe([{
+            "Part": item["part"], "Qty": item["quantity"],
+            f"Nominal ({build_unit})": round(item["nominal_m"]*factor,2),
+            f"Initial cut ({build_unit})": round(item["initial_cut_m"]*factor,2),
+        } for item in plan["cuts"]], use_container_width=True, hide_index=True)
+        st.caption("Initial cuts include the selected extra trim length per piece. "
+                   "Final dimensions must be measured after tuning.")
+        st.markdown("#### Materials to source")
+        st.dataframe([{"Material": name, "Qty": qty, "Specification": note}
+                      for name, qty, note in plan["materials"]],
+                     use_container_width=True, hide_index=True)
+        with st.expander("Step-by-step assembly and tuning", expanded=True):
+            for number, step in enumerate(plan["steps"],1):
+                st.checkbox(f"{number}. {step}", key=f"build_step_{number}")
+        pdf = printable_plan_pdf(plan, build_unit)
+        st.download_button("Download printable construction packet (PDF)", pdf,
+                           file_name=f"rf_lab_yagi_build_{build_frequency:g}MHz.pdf",
+                           mime="application/pdf", use_container_width=True)
+        st.warning("Starting geometry only. Use a calibrated antenna analyzer and "
+                   "appropriate mounting, feed isolation and matching. "
+                   "Stay well clear of power lines; verify structural and RF safety.")
+
 if section == "SWR Analyzer":
     r = st.number_input("Resistance (Ω)", min_value=0.0, value=75.0)
     x = st.number_input("Reactance (Ω)", value=0.0)
