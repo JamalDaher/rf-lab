@@ -90,7 +90,7 @@ h1 {font-weight:750}
 @media(prefers-reduced-motion:reduce) {
   .stButton > button, .stDownloadButton > button {transition:none}
 }
-/* v3.7.0 professional interface refinements */
+/* v3.8.0 professional interface refinements */
 :root {--rf-surface:#141F30;--rf-ink:#E9F1F8;--rf-muted:#9BAEC2}
 .rf-eyebrow {color:#39C6C0;font-size:.74rem;letter-spacing:.17em;font-weight:700;margin:.6rem 0 .7rem}
 .block-container {max-width:1320px;padding-top:1.7rem}
@@ -112,7 +112,7 @@ button:focus-visible,a:focus-visible,input:focus-visible {outline:2px solid #39C
 }
 </style>""",unsafe_allow_html=True)
 st.title("📡 RF Lab")
-st.caption("ENGINEERING WORKBENCH  /  v3.7.0")
+st.caption("ENGINEERING WORKBENCH  /  v3.8.0")
 with st.sidebar:
     st.header("Navigation")
     st.caption("One focused tool at a time.")
@@ -184,6 +184,10 @@ if section == "Home":
                 "are not validated performance guarantees. Check independent NEC "
                 "results and calibrated measurements before transmitting.")
     st.caption("Session data is temporary. Export JSON/ZIP backups from Project Library.")
+
+if section == "RF Signal Recording Comparison":
+    from rf_lab.signal_comparison_ui import render as render_signal_comparison
+    render_signal_comparison()
 
 if section == "RF Signal Analysis Dashboard":
     from rf_lab.signal_dashboard_ui import render as render_signal_dashboard
