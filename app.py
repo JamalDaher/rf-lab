@@ -90,7 +90,7 @@ h1 {font-weight:750}
 @media(prefers-reduced-motion:reduce) {
   .stButton > button, .stDownloadButton > button {transition:none}
 }
-/* v2.8.0 professional interface refinements */
+/* v2.9.0 professional interface refinements */
 :root {--rf-surface:#141F30;--rf-ink:#E9F1F8;--rf-muted:#9BAEC2}
 .rf-eyebrow {color:#39C6C0;font-size:.74rem;letter-spacing:.17em;font-weight:700;margin:.6rem 0 .7rem}
 .block-container {max-width:1320px;padding-top:1.7rem}
@@ -112,11 +112,11 @@ button:focus-visible,a:focus-visible,input:focus-visible {outline:2px solid #39C
 }
 </style>""",unsafe_allow_html=True)
 st.title("📡 RF Lab")
-st.caption("ENGINEERING WORKBENCH  /  v2.8.0")
+st.caption("ENGINEERING WORKBENCH  /  v2.9.0")
 with st.sidebar:
     st.header("Navigation")
     st.caption("One focused tool at a time.")
-    category=st.radio("Workspace",["Home","Projects","Design & optimize","Measure & match","RF calculators","Simulate & validate"],label_visibility="collapsed",key="rf_category")
+    category=st.radio("Workspace",["Home","Projects","Design & optimize","Measure & match","Signal analysis","RF calculators","Simulate & validate"],label_visibility="collapsed",key="rf_category")
     options={name:list(tools) for name,tools in WORKSPACES.items()}
     if category=="Home":
         section="Home"
@@ -184,6 +184,10 @@ if section == "Home":
                 "are not validated performance guarantees. Check independent NEC "
                 "results and calibrated measurements before transmitting.")
     st.caption("Session data is temporary. Export JSON/ZIP backups from Project Library.")
+
+if section == "Signal Analysis Workbench":
+    from rf_lab.signal_ui import render
+    render()
 
 if section == "Antenna Designer":
     f = st.number_input("Frequency (MHz)", min_value=0.001, value=146.0)
