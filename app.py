@@ -23,6 +23,7 @@ from rf_lab.reporting import create_measurement_pdf
 from rf_lab.patterns import (ANTENNA_TYPES, radiation_mesh, elevation_cut,
                              azimuth_cut, pattern_db)
 from rf_lab.measurement_workflow import parse_measurement_bytes, measurement_workflow
+from rf_lab.dashboard import WORKSPACES, FEATURED, dashboard_metrics, project_previews
 from rf_lab.project_library import (new_project, save_library, load_library, add_measurement,
     measurement_sweep, library_zip)
 from rf_lab.tuning import (tuning_advice, tuning_comparison, add_history_entry,
@@ -89,20 +90,34 @@ h1 {font-weight:750}
 @media(prefers-reduced-motion:reduce) {
   .stButton > button, .stDownloadButton > button {transition:none}
 }
+/* v2.8.0 professional interface refinements */
+:root {--rf-surface:#141F30;--rf-ink:#E9F1F8;--rf-muted:#9BAEC2}
+.rf-eyebrow {color:#39C6C0;font-size:.74rem;letter-spacing:.17em;font-weight:700;margin:.6rem 0 .7rem}
+.block-container {max-width:1320px;padding-top:1.7rem}
+[data-testid="stSidebar"] {background:linear-gradient(180deg,#101D2E 0%,#0B1220 100%)}
+[data-testid="stSidebar"] [role="radiogroup"] {gap:.3rem}
+[data-testid="stSidebar"] [role="radiogroup"] label {border-radius:9px;padding:.3rem .4rem}
+[data-testid="stMetric"] {background:linear-gradient(145deg,rgba(57,198,192,.075),rgba(148,163,184,.035));border-radius:15px}
+[data-testid="stMetricValue"] {font-variant-numeric:tabular-nums;letter-spacing:-.04em}
+[data-testid="stVerticalBlockBorderWrapper"] {border-color:rgba(148,163,184,.16)}
+[data-testid="stPlotlyChart"] {background:rgba(148,163,184,.025)}
+.stButton > button[kind="primary"] {background:#39C6C0;color:#0B1220}
+button:focus-visible,a:focus-visible,input:focus-visible {outline:2px solid #39C6C0;outline-offset:2px}
+@media(max-width:768px) {
+  .block-container {padding-top:.75rem}
+  [data-testid="stMetric"] {padding:10px}
+  [data-testid="stMetricLabel"] {font-size:.8rem}
+  [data-testid="stMetricValue"] {font-size:1.45rem}
+  .rf-eyebrow {font-size:.65rem;letter-spacing:.1em}
+}
 </style>""",unsafe_allow_html=True)
 st.title("📡 RF Lab")
-st.caption("RF Engineering Workbench · v2.7.0 · Experimental models clearly labeled")
+st.caption("ENGINEERING WORKBENCH  /  v2.8.0")
 with st.sidebar:
-    st.header("Explore RF Lab")
-    st.caption("Choose a workspace; only the selected tool is shown.")
+    st.header("Navigation")
+    st.caption("One focused tool at a time.")
     category=st.radio("Workspace",["Home","Projects","Design & optimize","Measure & match","RF calculators","Simulate & validate"],label_visibility="collapsed",key="rf_category")
-    options={
-        "Projects":["Project Library"],
-        "Design & optimize": ["Antenna Designer","3-Element Yagi","Construction Assistant","Tape-Measure Yagi","Yagi Patterns","Yagi Optimizer", "Design Workbench"],
-        "Measure & match": ["SWR Analyzer","Smith Chart","L-Network","NanoVNA S1P","VNA Workbench","Measurement & Tuning Workbench","Antenna Tuning"],
-        "RF calculators": ["RF Power","Path Loss","Coax Loss","Transmission Line"],
-        "Simulate & validate": ["Radiation Patterns","Thin-Wire MoM","Validation","NEC Comparison"],
-    }
+    options={name:list(tools) for name,tools in WORKSPACES.items()}
     if category=="Home":
         section="Home"
     else:
@@ -119,48 +134,56 @@ def open_workspace(category_name, tool_name):
     st.session_state["rf_section_"+category_name]=tool_name
 
 if section == "Home":
-    st.markdown("### Engineering tools, one workspace")
-    st.caption("Design antennas, analyze measurements, and investigate RF systems. "
-               "Start with a tool below or open your saved designs.")
-    st.markdown("#### Start here")
-    featured=[
-        ("🗂️","Project Library","Keep antenna builds and measurements together.","Projects"),
-        ("📐","Design Workbench","Save, compare and export Yagi antenna designs.","Design & optimize"),
-        ("📡","Yagi Optimizer","Explore constrained three-element antenna candidates.","Design & optimize"),
-        ("📊","NanoVNA S1P","Import Touchstone measurements and inspect matching.","Measure & match"),
-        ("🧭","Smith Chart","Explore complex impedance and matching behavior.","Measure & match"),
-        ("📈","Radiation Patterns","Visualize reference antenna radiation patterns.","Simulate & validate"),
-        ("🔬","Validation","Inspect numerical sensitivity and model limitations.","Simulate & validate"),
-    ]
+    st.markdown('<div class="rf-eyebrow">RF ENGINEERING PLATFORM · VERSION 2.8.0</div>',
+                unsafe_allow_html=True)
+    st.markdown("## Your RF engineering workspace")
+    st.caption("Design, build, measure and validate antenna systems in one place. "
+               "Choose a workflow below to get started.")
+    metrics=dashboard_metrics(st.session_state.get("antenna_projects",[]),
+                              st.session_state.get("design_library",[]),
+                              st.session_state.get("mt_history",[]))
+    summary=st.columns(4,gap="small")
+    for column,(label,key) in zip(summary,[
+        ("Antenna projects","projects"),("Saved designs","designs"),
+        ("S1P measurements","measurements"),("Available tools","available_tools")]):
+        with column:
+            st.metric(label,metrics[key])
+    st.markdown("### Quick launch")
     for start in (0,3):
         cols=st.columns(3,gap="medium")
-        for col,(symbol,name,description,group) in zip(cols,featured[start:start+3]):
+        for col,(symbol,name,description,group) in zip(cols,FEATURED[start:start+3]):
             with col:
                 with st.container(border=True):
-                    st.markdown(f"### {symbol} {name}")
+                    st.markdown(f"#### {symbol} {name}")
                     st.caption(description)
-                    st.button("Open tool",key="home_"+name,
+                    st.button("Open workspace",key="home_"+name,
                               use_container_width=True,
                               on_click=open_workspace,args=(group,name))
-    st.markdown("#### Your design workspace")
-    saved=st.session_state.get("design_library",[])
-    left,right=st.columns([2,1])
-    with left:
+    st.markdown("### Recent projects")
+    previews=project_previews(st.session_state.get("antenna_projects",[]))
+    if previews:
+        for project in previews:
+            with st.container(border=True):
+                left,right=st.columns([3,1])
+                with left:
+                    st.markdown(f"**{project['name']}**")
+                    st.caption(f"{project['frequency_mhz']:g} MHz · "
+                               f"{project['measurements']} saved measurements")
+                with right:
+                    st.button("Open project",key="home_project_"+project["id"],
+                              use_container_width=True,
+                              on_click=open_workspace,args=("Projects","Project Library"))
+    else:
         with st.container(border=True):
-            st.metric("Designs in this session",len(saved))
-            if saved:
-                st.caption("Recent: "+", ".join(d["name"] for d in saved[-3:]))
-            else:
-                st.caption("No designs saved in this session yet.")
-            st.button("Open design history",key="home_design_history",
-                      on_click=open_workspace,args=("Design & optimize","Design Workbench"))
-    with right:
-        with st.container(border=True):
-            st.markdown("**Model confidence**")
-            st.caption("Experimental EFIE outputs are not independently validated. "
-                       "Check NEC results and real measurements before construction.")
-    st.caption("RF Lab v2.7.0 · Open-source RF engineering tools · "
-               "Design history is local to the current session.")
+            st.markdown("**Start your first antenna project**")
+            st.caption("Keep dimensions, build steps, NanoVNA measurements and reports together.")
+            st.button("Create a project",key="home_new_project",
+                      on_click=open_workspace,args=("Projects","Project Library"))
+    with st.expander("Engineering model limitations",expanded=False):
+        st.info("Heuristic antenna dimensions and experimental EFIE simulations "
+                "are not validated performance guarantees. Check independent NEC "
+                "results and calibrated measurements before transmitting.")
+    st.caption("Session data is temporary. Export JSON/ZIP backups from Project Library.")
 
 if section == "Antenna Designer":
     f = st.number_input("Frequency (MHz)", min_value=0.001, value=146.0)
