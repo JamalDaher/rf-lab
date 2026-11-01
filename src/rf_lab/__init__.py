@@ -1,2 +1,2 @@
 """RF Lab: amateur radio engineering toolkit."""
-__version__ = "2.8.0"
+__version__ = "2.9.0"
