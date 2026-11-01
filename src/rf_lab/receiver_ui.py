@@ -6,9 +6,10 @@ import plotly.graph_objects as go
 import streamlit as st
 from rf_lab.sdr_lab import read_iq_bytes,iq_spectrum
 from rf_lab.receiver import synthetic_receiver_iq,receiver_pipeline,export_complex64
+from rf_lab.receiver_audio import prepare_audio,wav_bytes
 
 def render():
-    st.caption("Offline AM/FM IQ processing · no live SDR hardware or audio playback")
+    st.caption("Offline AM/FM IQ processing · playback and WAV export · no live SDR hardware")
     source=st.radio("Signal source",["Synthetic AM/FM","Recorded IQ"],horizontal=True,key="rx_source")
     left,right=st.columns(2)
     with left:
@@ -54,7 +55,7 @@ def render():
         a.metric("IQ samples",len(iq))
         b.metric("Tuning offset",f"{tune:g} Hz")
         c.metric("Audio RMS",f"{np.sqrt(np.mean(stages['demodulated']**2)):.4f}")
-        view=st.tabs(["IQ processing stages","Demodulated signal","Processed spectrum","Export"])
+        view=st.tabs(["IQ processing stages","Demodulated signal","Processed spectrum","Audio playback","Export"])
         with view[0]:
             for name in ("input","tuned","filtered"):
                 st.markdown(f"**{name.title()} IQ**")
@@ -80,6 +81,30 @@ def render():
                                   yaxis_title="dB re amplitude 1",height=280)
                 st.plotly_chart(fig,use_container_width=True)
         with view[3]:
+            st.markdown("#### Recovered audio")
+            agc=st.checkbox("Automatic gain control",value=True,key="rx_audio_agc")
+            deemp=st.checkbox("FM de-emphasis (75 µs)",value=demod=="FM",
+                               disabled=demod!="FM",key="rx_audio_deemp")
+            filtering=st.checkbox("Audio low-pass",value=True,key="rx_audio_filter")
+            maximum=max(101,min(7000,int(rate/2)-1))
+            cutoff=st.slider("Audio cutoff (Hz)",100,maximum,min(3000,maximum),
+                             key="rx_audio_cutoff",disabled=not filtering)
+            playback_rate=st.selectbox("Playback sample rate (Hz)",[8000,16000,24000,48000],
+                                       index=1,key="rx_playback_rate")
+            try:
+                audio,actual_rate=prepare_audio(
+                    stages["demodulated"],rate,demod,use_deemphasis=deemp and demod=="FM",
+                    use_agc=agc,cutoff_hz=cutoff if filtering else None,
+                    output_rate=playback_rate)
+                wav=wav_bytes(audio,actual_rate)
+                st.audio(wav,format="audio/wav")
+                st.download_button("Download recovered audio (WAV)",wav,
+                                   file_name="rf-lab-recovered-audio.wav",mime="audio/wav")
+                st.caption("Mono 16-bit PCM; linear resampling is educational and may alias "
+                           "when downsampling high-rate recordings.")
+            except ValueError as exc:
+                st.error(f"Audio processing unavailable: {exc}")
+        with view[4]:
             st.download_button("Download processed IQ (complex64)",
                                export_complex64(stages["filtered"]),
                                file_name="rf-lab-receiver-iq.cfile",mime="application/octet-stream")
