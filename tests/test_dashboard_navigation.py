@@ -10,10 +10,10 @@ def test_app_compiles():
 def test_dashboard_has_default_home_and_all_featured_tools():
     source=APP.read_text(encoding="utf-8")
     tree=ast.parse(source)
-    assert '["Home","Design & optimize","Measure & match","RF calculators","Simulate & validate"]' in source
+    assert '["Home","Projects","Design & optimize","Measure & match","RF calculators","Simulate & validate"]' in source
     assert 'if section == "Home":' in source
     assert 'on_click=open_workspace,args=(group,name)' in source
-    featured={"Design Workbench","Yagi Optimizer","NanoVNA S1P",
+    featured={"Project Library","Design Workbench","Yagi Optimizer","NanoVNA S1P",
               "Smith Chart","Radiation Patterns","Validation"}
     for name in featured:
         assert f'if section == "{name}":' in source
