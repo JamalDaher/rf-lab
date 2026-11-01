@@ -121,6 +121,20 @@ def printable_plan_pdf(plan, unit="cm"):
         positions.append([name,f"{position*scale:.2f}"])
     story.append(table(positions,[240,232]))
     story.append(Spacer(1,14))
+    if "positions_from_boom_end" in plan:
+        story.append(Paragraph("Tape-measure boom and mounting reference", styles["Heading2"]))
+        story.append(Paragraph(
+            f"PVC boom minimum stock length: {plan['boom_stock_m']*scale:.2f} {unit}. "
+            f"End margin: {plan['boom_end_margin_mm']:.1f} mm at each end. "
+            f"Tape width: {plan['tape_width_mm']:.1f} mm. "
+            f"Total initial tape length: {plan['total_tape_m']*scale:.2f} {unit} "
+            "(excludes kerf and waste).", styles["BodyText"]))
+        physical = [["Element", f"Mark from physical boom end ({unit})"]]
+        for name, position in plan["positions_from_boom_end"]:
+            physical.append([name, f"{position*scale:.2f}"])
+        story.append(Spacer(1,8))
+        story.append(table(physical,[240,232]))
+        story.append(Spacer(1,12))
     story.append(Paragraph("Materials checklist (verify specifications)",styles["Heading2"]))
     for name, qty, note in plan["materials"]:
         story.append(Paragraph(f"[ ] {qty} x <b>{name}</b> - {note}",styles["BodyText"]))
