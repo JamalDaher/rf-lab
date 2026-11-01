@@ -10,6 +10,7 @@ import streamlit as st
 from rf_lab.core import (dipole_length_m, quarter_wave_m, swr, return_loss_db,
                          watts_to_dbm, dbm_to_watts, free_space_path_loss_db)
 from rf_lab.yagi import design_yagi, cutting_list
+from rf_lab.geometry_view import geometry_figure, dimension_rows
 from rf_lab.yagi_pattern import simulate_yagi, yagi_surface
 from rf_lab.mom import solve_yagi_mom
 from rf_lab.validation import mesh_sensitivity, short_dipole_directivity_check
@@ -85,7 +86,7 @@ h1 {font-weight:750}
 }
 </style>""",unsafe_allow_html=True)
 st.title("📡 RF Lab")
-st.caption("RF Engineering Workbench · v2.2.0 · Experimental models clearly labeled")
+st.caption("RF Engineering Workbench · v2.3.0 · Experimental models clearly labeled")
 with st.sidebar:
     st.header("Explore RF Lab")
     st.caption("Choose a workspace; only the selected tool is shown.")
@@ -171,19 +172,21 @@ if section == "3-Element Yagi":
         st.error(str(exc))
     else:
         st.metric("Reflector-to-director spacing", f"{design.boom_length_m*100:.1f} cm")
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(x=[0,design.boom_length_m*100], y=[0,0],
-                                 mode="lines", line=dict(width=7, color="gray"),
-                                 name="Boom"))
-        for element in design.elements:
-            x = element.position_m * 100
-            half = element.length_m * 50
-            fig.add_trace(go.Scatter(x=[x,x], y=[-half,half], mode="lines+markers",
-                                     name=element.name, line=dict(width=7)))
-        fig.update_layout(title="Top-down element layout (centimeters)",
-                          xaxis_title="Boom position (cm)", yaxis_title="Element half-length (cm)",
-                          yaxis_scaleanchor="x", showlegend=True)
+        view_col, unit_col = st.columns(2)
+        with view_col:
+            drawing_view = st.segmented_control("Engineering view", ["3D", "Top view"],
+                                                default="3D", key="yagi_drawing_view")
+        with unit_col:
+            drawing_unit = st.selectbox("Drawing units", ["cm", "in", "mm"],
+                                        key="yagi_drawing_units")
+        fig = geometry_figure(design, view=drawing_view or "3D", unit=drawing_unit)
         st.plotly_chart(fig, use_container_width=True)
+        st.caption("Interactive dimensional model (not an EM simulation). "
+                   "Drag to rotate the 3D view; zoom or hover to inspect the elements.")
+        st.markdown("**Dimension schedule**")
+        st.dataframe(dimension_rows(design, drawing_unit),
+                     use_container_width=True, hide_index=True)
+        st.metric("Driven feed gap", f"{design.feed_gap_m * {'cm': 100, 'in': 39.37007874015748, 'mm': 1000}[drawing_unit]:.2f} {drawing_unit}")
         rows = cutting_list(design)
         display = [{"Part": r["part"], "Qty": r["quantity"],
                     "Each length (cm)": round(r["length_m"]*100,2),
