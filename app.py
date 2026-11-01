@@ -5,6 +5,7 @@ import math
 import cmath
 import numpy as np
 import plotly.graph_objects as go
+import plotly.io as pio
 import streamlit as st
 from rf_lab.core import (dipole_length_m, quarter_wave_m, swr, return_loss_db,
                          watts_to_dbm, dbm_to_watts, free_space_path_loss_db)
@@ -27,14 +28,64 @@ from rf_lab.advanced import (smith_coordinates, gamma_from_impedance, coax_loss_
                              l_match_solutions)
 
 st.set_page_config(page_title="RF Lab | RF Engineering Workbench", page_icon="📡", layout="wide", initial_sidebar_state="expanded")
+# Consistent visual defaults for existing Plotly figures, without altering their data.
+RF_CHART_COLORS = ["#39C6C0", "#7E9BFF", "#F7B267", "#E985B5", "#A8D672", "#B6A4FA"]
+pio.templates["rf_lab"] = go.layout.Template(
+    layout=go.Layout(
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(color="#E9F1F8", family="Arial, sans-serif", size=13),
+        colorway=RF_CHART_COLORS,
+        margin=dict(l=32,r=24,t=44,b=42),
+        xaxis=dict(showgrid=True, gridcolor="rgba(148,163,184,.14)",
+                   zerolinecolor="rgba(148,163,184,.25)", automargin=True),
+        yaxis=dict(showgrid=True, gridcolor="rgba(148,163,184,.14)",
+                   zerolinecolor="rgba(148,163,184,.25)", automargin=True),
+        legend=dict(bgcolor="rgba(0,0,0,0)"),
+    )
+)
+pio.templates.default = "plotly+rf_lab"
+
 st.markdown("""<style>
-.block-container {max-width:1180px;padding-top:1.7rem;padding-bottom:4rem}
-h1,h2,h3 {letter-spacing:-.025em}
-div[data-testid="stMetric"] {border:1px solid rgba(128,140,160,.20);border-radius:12px;padding:12px 16px}
-div[data-testid="stSidebar"] {border-right:1px solid rgba(128,140,160,.18)}
+:root {--rf-accent:#39C6C0;--rf-border:rgba(148,163,184,.19)}
+.block-container {max-width:1240px;padding-top:1.4rem;padding-bottom:4rem}
+h1,h2,h3 {letter-spacing:-.035em;line-height:1.25}
+h1 {font-weight:750}
+[data-testid="stCaptionContainer"] {line-height:1.55}
+[data-testid="stSidebar"] {border-right:1px solid var(--rf-border)}
+[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] h2 {letter-spacing:-.025em}
+[data-testid="stMetric"] {
+  background:rgba(148,163,184,.055);
+  border:1px solid var(--rf-border);
+  border-radius:14px;
+  padding:15px 17px;
+}
+[data-testid="stVerticalBlockBorderWrapper"] > div {
+  border-radius:16px;
+}
+.stButton > button, .stDownloadButton > button, .stLinkButton > a {
+  border-radius:10px;min-height:2.65rem;transition:filter .15s ease;
+}
+.stButton > button:hover, .stDownloadButton > button:hover {filter:brightness(1.12)}
+[data-testid="stAlert"] {border-radius:12px}
+[data-testid="stDataFrame"] {border-radius:12px;overflow:hidden}
+[data-testid="stPlotlyChart"] {border:1px solid var(--rf-border);border-radius:14px;padding:6px}
+@media(max-width:768px) {
+  .block-container {padding:1rem .8rem 3rem}
+  h1 {font-size:1.8rem!important}
+  h2 {font-size:1.45rem!important}
+  h3 {font-size:1.15rem!important}
+  [data-testid="stHorizontalBlock"] {flex-wrap:wrap;gap:.7rem}
+  [data-testid="column"] {min-width:min(100%,270px)!important;flex:1 1 100%!important}
+  [data-testid="stMetric"] {padding:12px}
+  [data-testid="stPlotlyChart"] {padding:0}
+}
+@media(prefers-reduced-motion:reduce) {
+  .stButton > button, .stDownloadButton > button {transition:none}
+}
 </style>""",unsafe_allow_html=True)
 st.title("📡 RF Lab")
-st.caption("RF Engineering Workbench · v2.1.0 · Experimental models clearly labeled")
+st.caption("RF Engineering Workbench · v2.2.0 · Experimental models clearly labeled")
 with st.sidebar:
     st.header("Explore RF Lab")
     st.caption("Choose a workspace; only the selected tool is shown.")

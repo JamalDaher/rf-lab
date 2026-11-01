@@ -7,7 +7,7 @@
 
 An open-source amateur radio engineering toolkit built with Python and Streamlit.
 
-## Features (v2.1.0)
+## Features (v2.2.0)
 
 - **Local NEC-2 benchmark pipeline:** optional local CLI execution, impedance-only comparison, reproducibility hashes, JSON report import (not yet tested with a real NEC binary)
 - **NEC-2 deck generator:** download a reproducible Yagi .nec model, with an opt-in local executable adapter (no NEC executable bundled; not yet an end-to-end automated benchmark)
@@ -33,7 +33,7 @@ An open-source amateur radio engineering toolkit built with Python and Streamlit
 Read [Yagi assumptions](docs/yagi-designer.md), [advanced RF models](docs/advanced-rf.md), [transmission lines and Touchstone](docs/measurements.md), [NanoVNA workbench](docs/nanovna-workbench.md), [antenna tuning](docs/antenna-tuning.md), [radiation patterns](docs/radiation-patterns.md
 docs/yagi-patterns.md), and [Yagi pattern limitations](docs/yagi-patterns.md), and [experimental thin-wire EFIE limitations](docs/thin-wire-mom.md).
 
-## v2.1.0 validation status
+## v2.2.0 validation status
 
 This release provides numerical diagnostics, **not a validated antenna solver**. See [validation report and outstanding acceptance gates](docs/validation-v1.md). Physical impedance, SWR and gain predictions remain experimental.
 
@@ -55,12 +55,22 @@ NEC-2c support: [real solver CI smoke test and setup](docs/nec2c-integration.md)
 
 [Experimental three-element Yagi optimization, geometry exports and limitations](docs/yagi-optimization.md).
 
-## RF Lab v2.1.0 — Design Workbench
+## RF Lab v2.2.0 — Design Workbench
 
 The Streamlit interface now uses a **grouped sidebar** instead of 18 crowded tabs, with a restrained responsive layout. The new **Design Workbench** saves versioned Yagi designs to downloadable JSON, imports them back, compares up to five session designs, plots experimental EFIE impedance/SWR frequency sweeps, and exports a ZIP with NEC-2 deck, dimensions and optional sweep data. Session history is not server-persistent: download JSON to preserve it. These are unvalidated numerical estimates, not verified antenna specifications.
 
 **Live demo:** https://rf-lab-jdaher.streamlit.app
 
-## v2.1.0 Dashboard home
+## v2.2.0 Dashboard home
 
 The new **Home** workspace is the default landing page. Six clickable cards lead directly to Design Workbench, Yagi Optimizer, NanoVNA S1P, Smith Chart, Radiation Patterns, and Validation. A session-design summary links to the existing saved-design workbench. The sidebar retains all tools, with Home as the first option. No cloud design storage is introduced: saved designs are session-only unless exported to JSON.
+
+## v2.2.0 Visual polish
+
+- Consistent dark engineering palette (deep navy, teal highlights), configured in `.streamlit/config.toml`.
+- Shared Plotly defaults for grid lines, chart backgrounds, typography, and a six-color series palette.
+- Improved spacing, metric cards, button shapes, chart framing, and sidebar visual hierarchy.
+- Responsive small-screen adjustments for stacked cards and charts, plus reduced-motion support.
+- All existing tools and the dashboard remain available; no Live Demo self-link is added.
+
+**Accessibility:** Verify color contrast, keyboard focus, and mobile layouts on the deployed app; automated tests cover configuration and syntax, not visual rendering.
