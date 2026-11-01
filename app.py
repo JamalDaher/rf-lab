@@ -12,6 +12,7 @@ from rf_lab.core import (dipole_length_m, quarter_wave_m, swr, return_loss_db,
 from rf_lab.yagi import design_yagi, cutting_list
 from rf_lab.geometry_view import geometry_figure, dimension_rows
 from rf_lab.construction import construction_plan, printable_plan_pdf
+from rf_lab.tape_measure import tape_measure_plan, MOUNT_OPTIONS
 from rf_lab.yagi_pattern import simulate_yagi, yagi_surface
 from rf_lab.mom import solve_yagi_mom
 from rf_lab.validation import mesh_sensitivity, short_dipole_directivity_check
@@ -87,13 +88,13 @@ h1 {font-weight:750}
 }
 </style>""",unsafe_allow_html=True)
 st.title("📡 RF Lab")
-st.caption("RF Engineering Workbench · v2.4.0 · Experimental models clearly labeled")
+st.caption("RF Engineering Workbench · v2.5.0 · Experimental models clearly labeled")
 with st.sidebar:
     st.header("Explore RF Lab")
     st.caption("Choose a workspace; only the selected tool is shown.")
     category=st.radio("Workspace",["Home","Design & optimize","Measure & match","RF calculators","Simulate & validate"],label_visibility="collapsed",key="rf_category")
     options={
-        "Design & optimize": ["Antenna Designer","3-Element Yagi","Construction Assistant","Yagi Patterns","Yagi Optimizer", "Design Workbench"],
+        "Design & optimize": ["Antenna Designer","3-Element Yagi","Construction Assistant","Tape-Measure Yagi","Yagi Patterns","Yagi Optimizer", "Design Workbench"],
         "Measure & match": ["SWR Analyzer","Smith Chart","L-Network","NanoVNA S1P","VNA Workbench","Antenna Tuning"],
         "RF calculators": ["RF Power","Path Loss","Coax Loss","Transmission Line"],
         "Simulate & validate": ["Radiation Patterns","Thin-Wire MoM","Validation","NEC Comparison"],
@@ -153,7 +154,7 @@ if section == "Home":
             st.markdown("**Model confidence**")
             st.caption("Experimental EFIE outputs are not independently validated. "
                        "Check NEC results and real measurements before construction.")
-    st.caption("RF Lab v2.4.0 · Open-source RF engineering tools · "
+    st.caption("RF Lab v2.5.0 · Open-source RF engineering tools · "
                "Design history is local to the current session.")
 
 if section == "Antenna Designer":
@@ -251,6 +252,67 @@ if section == "Construction Assistant":
         st.warning("Starting geometry only. Use a calibrated antenna analyzer and "
                    "appropriate mounting, feed isolation and matching. "
                    "Stay well clear of power lines; verify structural and RF safety.")
+
+if section == "Tape-Measure Yagi":
+    st.caption("Portable three-element steel tape-measure Yagi construction planner. "
+               "Starting dimensions are heuristic and must be tuned on the finished assembly.")
+    left, right = st.columns(2)
+    with left:
+        tape_freq = st.number_input("Target frequency (MHz)", min_value=0.001,
+                                    value=146.0, key="tape_freq")
+        tape_gap = st.number_input("Driven feed gap (mm)", min_value=0.1,
+                                   value=12.0, key="tape_gap")
+        tape_width = st.number_input("Tape blade width (mm)", min_value=5.0,
+                                     max_value=100.0, value=25.0, key="tape_width")
+    with right:
+        tape_margin = st.number_input("PVC boom end margin, each end (mm)",
+                                      min_value=0.0, max_value=500.0,
+                                      value=50.0, key="tape_margin")
+        tape_trim = st.number_input("Extra trim per blade piece (mm)",
+                                    min_value=0.0, max_value=100.0,
+                                    value=10.0, key="tape_trim")
+        tape_mount = st.selectbox("Mounting option", list(MOUNT_OPTIONS),
+                                  key="tape_mount")
+        tape_unit = st.selectbox("Dimensions", ["cm","in","mm"], key="tape_unit")
+    try:
+        tape_design, tape_plan = tape_measure_plan(
+            tape_freq, tape_gap, tape_trim, tape_margin, tape_width, tape_mount)
+    except ValueError as exc:
+        st.error(str(exc))
+    else:
+        scale = {"cm":100.0,"in":39.37007874015748,"mm":1000.0}[tape_unit]
+        st.plotly_chart(geometry_figure(tape_design, "Top view", tape_unit),
+                        use_container_width=True)
+        st.caption("Drawing origin is the reflector centerline. "
+                   "Physical boom-end mounting marks appear below.")
+        a, b = st.columns(2)
+        a.metric("Minimum PVC boom stock", f"{tape_plan['boom_stock_m']*scale:.2f} {tape_unit}")
+        b.metric("Tape needed before cutting waste", f"{tape_plan['total_tape_m']*scale:.2f} {tape_unit}")
+        st.markdown("#### Tape-blade cutting schedule")
+        st.dataframe([{
+            "Part": cut["part"], "Pieces":cut["quantity"],
+            f"Nominal ({tape_unit})":round(cut["nominal_m"]*scale,2),
+            f"Initial cut ({tape_unit})":round(cut["initial_cut_m"]*scale,2),
+        } for cut in tape_plan["cuts"]],use_container_width=True,hide_index=True)
+        st.markdown("#### Mark positions from physical PVC boom end")
+        st.dataframe([{"Element":name, f"Position ({tape_unit})":round(position*scale,2)}
+                      for name,position in tape_plan["positions_from_boom_end"]],
+                     use_container_width=True,hide_index=True)
+        st.markdown("#### Hardware and materials")
+        st.dataframe([{"Item":name,"Qty":qty,"Notes":note}
+                      for name,qty,note in tape_plan["materials"]],
+                     use_container_width=True,hide_index=True)
+        with st.expander("Field assembly and tuning checklist",expanded=True):
+            for index, step in enumerate(tape_plan["steps"],1):
+                st.checkbox(f"{index}. {step}",key=f"tape_step_{index}")
+        packet = printable_plan_pdf(tape_plan,tape_unit)
+        st.download_button("Download tape-measure Yagi build packet (PDF)",packet,
+                           file_name=f"rf_lab_tape_yagi_{tape_freq:g}MHz.pdf",
+                           mime="application/pdf",use_container_width=True)
+        st.warning("Steel tape is sharp and springy; wear gloves and eye protection. "
+                   "Secure all blades and stay clear of overhead power lines. "
+                   "Tape width and mounting hardware affect resonance; use an analyzer "
+                   "to verify matching before transmitting.")
 
 if section == "SWR Analyzer":
     r = st.number_input("Resistance (Ω)", min_value=0.0, value=75.0)
